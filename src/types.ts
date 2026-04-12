@@ -12,39 +12,41 @@ export interface CodeReference {
   lineEnd?: number;
 }
 
-// NUEVO: Definición de una Columna
 export interface LynvoColumn {
-  id: string; // Identificador único (ej: "col-123")
-  title: string; // Nombre visible (ej: "En espera")
-  color: string; // Color en formato Hex o CSS variable
+  id: string;
+  title: string;
+  color: string;
   position: number;
 }
 
-// NUEVO: Definición de una Etiqueta
 export interface LynvoLabel {
   id: string;
   name: string;
   color: string;
 }
 
+export type LynvoPriority = "low" | "medium" | "high";
+
 export interface LynvoTask {
   id: string;
   title: string;
   description: string;
-  status: string; // Ahora apunta al ID de una columna dinámica
+  status: string;
   createdBy: LynvoUser;
   lastModifiedBy: LynvoUser;
   createdAt: number;
   updatedAt: number;
   codeReference?: CodeReference;
   position?: number;
-  labelIds?: string[]; // Referencia a las etiquetas
-  priority?: "low" | "medium" | "high";
+  labelIds?: string[];
+  priority?: LynvoPriority;
+  dueDate?: number;
+  archived?: boolean;
 }
 
 export interface LynvoBoard {
   version: string;
-  columns: Record<string, LynvoColumn>; // NUEVO: Diccionario de columnas
+  columns: Record<string, LynvoColumn>;
   tasks: Record<string, LynvoTask>;
-  labels?: Record<string, LynvoLabel>; // NUEVO: Diccionario de etiquetas
+  labels?: Record<string, LynvoLabel>;
 }
