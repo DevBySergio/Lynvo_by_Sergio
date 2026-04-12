@@ -33471,45 +33471,55 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.App = void 0;
-// src/webview/App.tsx
 const React = __importStar(__webpack_require__(/*! react */ "./node_modules/react/index.js"));
 const react_1 = __webpack_require__(/*! react */ "./node_modules/react/index.js");
 const vscode = acquireVsCodeApi();
-const formatDateTime = (timestamp) => {
-    const date = new Date(timestamp);
-    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-};
 const HOURS_24 = 24 * 60 * 60 * 1000;
 const DAYS_14 = 14;
+const PRIORITY_META = {
+    low: { label: "Low", color: "#2ea043" },
+    medium: { label: "Medium", color: "#d29922" },
+    high: { label: "High", color: "#f85149" },
+};
+const formatDateTime = (ts) => {
+    const d = new Date(ts);
+    return `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+};
+const formatDate = (ts) => new Date(ts).toLocaleDateString([], { month: "short", day: "numeric" });
+const toInputDate = (timestamp) => (timestamp ? new Date(timestamp - new Date().getTimezoneOffset() * 60000).toISOString().split("T")[0] : "");
+const fromInputDate = (value) => (value ? new Date(`${value}T23:59:59`).getTime() : undefined);
 const App = () => {
     const [boardData, setBoardData] = (0, react_1.useState)(null);
     const [activeView, setActiveView] = (0, react_1.useState)("board");
-    // Filtros y Sincronización
     const [searchTerm, setSearchTerm] = (0, react_1.useState)("");
     const [activeFilterLabel, setActiveFilterLabel] = (0, react_1.useState)("");
+    const [activePriority, setActivePriority] = (0, react_1.useState)("");
+    const [showArchived, setShowArchived] = (0, react_1.useState)(false);
+    const [sortMode, setSortMode] = (0, react_1.useState)("manual");
     const [isSyncing, setIsSyncing] = (0, react_1.useState)(false);
-    // --- ESTADOS DE TAREAS ---
     const [addingTaskColId, setAddingTaskColId] = (0, react_1.useState)(null);
     const [newTaskTitle, setNewTaskTitle] = (0, react_1.useState)("");
     const [newTaskDesc, setNewTaskDesc] = (0, react_1.useState)("");
     const [newTaskLabels, setNewTaskLabels] = (0, react_1.useState)([]);
+    const [newTaskPriority, setNewTaskPriority] = (0, react_1.useState)("medium");
+    const [newTaskDueDate, setNewTaskDueDate] = (0, react_1.useState)("");
     const [editingTaskId, setEditingTaskId] = (0, react_1.useState)(null);
     const [editTitle, setEditTitle] = (0, react_1.useState)("");
     const [editDesc, setEditDesc] = (0, react_1.useState)("");
     const [editLabelIds, setEditLabelIds] = (0, react_1.useState)([]);
-    // --- ESTADOS DE COLUMNAS ---
+    const [editPriority, setEditPriority] = (0, react_1.useState)("medium");
+    const [editDueDate, setEditDueDate] = (0, react_1.useState)("");
     const [isAddingColumn, setIsAddingColumn] = (0, react_1.useState)(false);
     const [newColTitle, setNewColTitle] = (0, react_1.useState)("");
     const [newColColor, setNewColColor] = (0, react_1.useState)("#007acc");
     const [editingColId, setEditingColId] = (0, react_1.useState)(null);
     const [editColTitle, setEditColTitle] = (0, react_1.useState)("");
     const [editColColor, setEditColColor] = (0, react_1.useState)("");
-    // --- ESTADOS DE ETIQUETAS ---
     const [newLabelName, setNewLabelName] = (0, react_1.useState)("");
     const [newLabelColor, setNewLabelColor] = (0, react_1.useState)("#f85149");
     const draggedTaskRef = (0, react_1.useRef)(null);
     const dragOverTaskRef = (0, react_1.useRef)(null);
-    const isFiltering = searchTerm.trim().length > 0 || activeFilterLabel !== "";
+    const isFiltering = searchTerm || activeFilterLabel || activePriority || showArchived || sortMode !== "manual";
     (0, react_1.useEffect)(() => {
         const handleMessage = (event) => {
             if (event.data.command === "loadData") {
@@ -33521,744 +33531,251 @@ const App = () => {
         vscode.postMessage({ command: "requestData" });
         return () => window.removeEventListener("message", handleMessage);
     }, []);
-    const triggerSync = () => {
-        setIsSyncing(true);
-        vscode.postMessage({ command: "syncBoard" });
+    const toggleLabel = (labelId, current, setter) => {
+        setter(current.includes(labelId) ? current.filter((id) => id !== labelId) : [...current, labelId]);
     };
-    // --- LÓGICA DRAG & DROP ---
-    const handleDragStart = (e, id) => {
-        if (editingTaskId === id || isFiltering) {
-            e.preventDefault();
-            return;
+    const getTasksByStatusFiltered = (status) => {
+        if (!boardData)
+            return [];
+        const tasks = Object.values(boardData.tasks)
+            .filter((t) => t.status === status)
+            .filter((t) => Boolean(showArchived) === Boolean(t.archived))
+            .filter((t) => !searchTerm || t.title.toLowerCase().includes(searchTerm.toLowerCase()) || t.description.toLowerCase().includes(searchTerm.toLowerCase()))
+            .filter((t) => !activeFilterLabel || t.labelIds?.includes(activeFilterLabel))
+            .filter((t) => !activePriority || (t.priority || "medium") === activePriority);
+        if (sortMode === "updated")
+            return tasks.sort((a, b) => b.updatedAt - a.updatedAt);
+        if (sortMode === "priority") {
+            const rank = { high: 3, medium: 2, low: 1 };
+            return tasks.sort((a, b) => rank[(b.priority || "medium")] - rank[(a.priority || "medium")]);
         }
-        draggedTaskRef.current = id;
-        e.dataTransfer.setData("taskId", id);
+        return tasks.sort((a, b) => (a.position ?? a.createdAt) - (b.position ?? b.createdAt));
+    };
+    const boardMetrics = (0, react_1.useMemo)(() => {
+        if (!boardData)
+            return null;
+        const tasks = Object.values(boardData.tasks).filter((t) => !t.archived);
+        const doneColumnIds = Object.values(boardData.columns).filter((c) => /done|hecho|complet/i.test(c.title)).map((c) => c.id);
+        const doneTasks = tasks.filter((t) => doneColumnIds.includes(t.status));
+        const activeTasks = tasks.filter((t) => !doneColumnIds.includes(t.status));
+        const doneInLast7Days = doneTasks.filter((t) => t.updatedAt >= Date.now() - 7 * HOURS_24);
+        const completionRate = tasks.length ? Math.round((doneTasks.length / tasks.length) * 100) : 0;
+        const overdueTasks = activeTasks.filter((t) => t.dueDate && t.dueDate < Date.now());
+        const participants = Array.from(tasks.reduce((acc, t) => {
+            const key = t.lastModifiedBy?.githubId || "unknown";
+            const curr = acc.get(key);
+            if (curr)
+                curr.updates += 1;
+            else
+                acc.set(key, { username: t.lastModifiedBy?.username || "Unknown", updates: 1 });
+            return acc;
+        }, new Map()).values()).sort((a, b) => b.updates - a.updates);
+        const avgCycleHours = doneTasks.length ? Math.round(doneTasks.reduce((acc, t) => acc + (t.updatedAt - t.createdAt), 0) / doneTasks.length / 3600000) : 0;
+        const activitySeries = Array.from({ length: DAYS_14 }, (_, i) => {
+            const dayStart = new Date();
+            dayStart.setHours(0, 0, 0, 0);
+            dayStart.setDate(dayStart.getDate() - (DAYS_14 - 1 - i));
+            const dayEnd = dayStart.getTime() + HOURS_24;
+            return {
+                label: dayStart.toLocaleDateString([], { month: "short", day: "numeric" }),
+                count: tasks.filter((t) => t.updatedAt >= dayStart.getTime() && t.updatedAt < dayEnd).length,
+            };
+        });
+        return { tasks, doneTasks, doneInLast7Days, completionRate, overdueTasks, participants, avgCycleHours, activitySeries };
+    }, [boardData]);
+    const renderLabelSelector = (selected, setter) => (React.createElement("div", { style: { display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 8 } }, boardData?.labels && Object.values(boardData.labels).map((label) => {
+        const isSelected = selected.includes(label.id);
+        return (React.createElement("span", { key: label.id, onClick: () => toggleLabel(label.id, selected, setter), style: { padding: "2px 8px", borderRadius: 10, fontSize: 10, cursor: "pointer", backgroundColor: isSelected ? label.color : "transparent", color: isSelected ? "#fff" : label.color, border: `1px solid ${label.color}` } }, label.name));
+    })));
+    const taskEditorExtras = (priority, setPriority, dueDate, setDueDate) => (React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 8 } },
+        React.createElement("select", { value: priority, onChange: (e) => setPriority(e.target.value), style: { flex: 1, padding: 5 } },
+            React.createElement("option", { value: "low" }, "Low priority"),
+            React.createElement("option", { value: "medium" }, "Medium priority"),
+            React.createElement("option", { value: "high" }, "High priority")),
+        React.createElement("input", { type: "date", value: dueDate, onChange: (e) => setDueDate(e.target.value), style: { flex: 1, padding: 5 } })));
+    const renderTaskCard = (task) => {
+        const isEditing = editingTaskId === task.id;
+        const priority = task.priority || "medium";
+        const isOverdue = Boolean(task.dueDate && task.dueDate < Date.now() && !task.archived);
+        return (React.createElement("div", { key: task.id, draggable: !isEditing && !isFiltering, onDragStart: (e) => { if (isEditing || isFiltering) {
+                e.preventDefault();
+                return;
+            } draggedTaskRef.current = task.id; }, onDragEnter: () => { dragOverTaskRef.current = task.id; }, style: { backgroundColor: "var(--vscode-editor-background)", border: `1px solid ${isOverdue ? "var(--vscode-errorForeground)" : "var(--vscode-widget-border)"}`, padding: 12, marginBottom: 10, borderRadius: 10, position: "relative" } }, isEditing ? (React.createElement(React.Fragment, null,
+            React.createElement("input", { autoFocus: true, value: editTitle, onChange: (e) => setEditTitle(e.target.value), style: { width: "100%", marginBottom: 8, padding: 5 } }),
+            React.createElement("textarea", { value: editDesc, onChange: (e) => setEditDesc(e.target.value), rows: 3, style: { width: "100%", marginBottom: 8, padding: 5 } }),
+            taskEditorExtras(editPriority, setEditPriority, editDueDate, setEditDueDate),
+            renderLabelSelector(editLabelIds, setEditLabelIds),
+            React.createElement("div", { style: { display: "flex", justifyContent: "flex-end", gap: 5 } },
+                React.createElement("button", { onClick: () => setEditingTaskId(null) }, "Cancel"),
+                React.createElement("button", { onClick: () => {
+                        if (!editingTaskId || !editTitle.trim())
+                            return;
+                        vscode.postMessage({ command: "editTask", taskId: editingTaskId, title: editTitle, description: editDesc, labelIds: editLabelIds, priority: editPriority, dueDate: fromInputDate(editDueDate) });
+                        setEditingTaskId(null);
+                    }, style: { background: "var(--vscode-button-background)", color: "white", border: "none" } }, "Save")))) : (React.createElement(React.Fragment, null,
+            React.createElement("h4", { style: { margin: "0 0 8px 0", paddingRight: 50 } }, task.title),
+            React.createElement("div", { style: { position: "absolute", top: 8, right: 8, display: "flex", gap: 2 } },
+                task.archived ? React.createElement("button", { className: "icon-btn", onClick: () => vscode.postMessage({ command: "restoreTask", taskId: task.id }) }, "\u267B\uFE0F") : React.createElement("button", { className: "icon-btn", onClick: () => { setEditingTaskId(task.id); setEditTitle(task.title); setEditDesc(task.description); setEditLabelIds(task.labelIds || []); setEditPriority(task.priority || "medium"); setEditDueDate(toInputDate(task.dueDate)); } }, "\u270F\uFE0F"),
+                React.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({ command: "deleteTask", taskId: task.id }) }, "\uD83D\uDDD1\uFE0F")),
+            React.createElement("div", { style: { display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 } },
+                React.createElement("span", { style: { padding: "2px 8px", borderRadius: 10, fontSize: 10, border: `1px solid ${PRIORITY_META[priority].color}`, color: PRIORITY_META[priority].color } },
+                    "\u26A1 ",
+                    PRIORITY_META[priority].label),
+                task.dueDate && React.createElement("span", { style: { padding: "2px 8px", borderRadius: 10, fontSize: 10, border: `1px solid ${isOverdue ? "var(--vscode-errorForeground)" : "var(--vscode-widget-border)"}`, color: isOverdue ? "var(--vscode-errorForeground)" : "inherit" } },
+                    "\uD83D\uDCC5 ",
+                    formatDate(task.dueDate)),
+                task.archived && React.createElement("span", { style: { padding: "2px 8px", borderRadius: 10, fontSize: 10, border: "1px solid var(--vscode-widget-border)" } }, "Archived")),
+            task.labelIds && React.createElement("div", { style: { display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 } }, task.labelIds.map((id) => {
+                const l = boardData?.labels?.[id];
+                if (!l)
+                    return null;
+                return React.createElement("span", { key: id, style: { backgroundColor: l.color, color: "#fff", padding: "2px 6px", borderRadius: 8, fontSize: 10 } }, l.name);
+            })),
+            task.codeReference && React.createElement("div", { onClick: () => vscode.postMessage({ command: "openCode", filePath: task.codeReference.filePath, lineStart: task.codeReference.lineStart }), style: { fontSize: 10, backgroundColor: "var(--vscode-button-secondaryBackground)", padding: "3px 6px", borderRadius: 3, cursor: "pointer", marginBottom: 8, display: "inline-block" } },
+                "\uD83D\uDD17 ",
+                task.codeReference.filePath.split("/").pop(),
+                " (L: ",
+                task.codeReference.lineStart,
+                ")"),
+            React.createElement("p", { style: { fontSize: 12, opacity: 0.85, margin: "0 0 8px 0" } }, task.description || "Sin descripción"),
+            React.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: 10, opacity: 0.7 } },
+                React.createElement("span", null,
+                    "\uD83D\uDC64 ",
+                    task.lastModifiedBy?.username),
+                React.createElement("span", null,
+                    "\uD83D\uDD52 ",
+                    formatDateTime(task.updatedAt)))))));
     };
     const handleDrop = (e, newStatus) => {
         e.preventDefault();
-        if (isFiltering)
+        if (isFiltering || !boardData)
             return;
         const taskId = draggedTaskRef.current;
-        const targetId = dragOverTaskRef.current;
-        if (!taskId || !boardData)
+        if (!taskId)
             return;
+        const targetId = dragOverTaskRef.current;
         const updatedTasks = { ...boardData.tasks };
         updatedTasks[taskId].status = newStatus;
-        let colTasks = Object.values(updatedTasks)
-            .filter((t) => t.status === newStatus)
-            .sort((a, b) => (a.position ?? a.createdAt) - (b.position ?? b.createdAt));
+        updatedTasks[taskId].archived = false;
+        let colTasks = Object.values(updatedTasks).filter((t) => t.status === newStatus && !t.archived).sort((a, b) => (a.position ?? a.createdAt) - (b.position ?? b.createdAt));
         colTasks = colTasks.filter((t) => t.id !== taskId);
         const targetIdx = colTasks.findIndex((t) => t.id === targetId);
         if (targetIdx === -1)
             colTasks.push(updatedTasks[taskId]);
         else
             colTasks.splice(targetIdx, 0, updatedTasks[taskId]);
-        const updates = colTasks.map((t, i) => ({
-            id: t.id,
-            status: newStatus,
-            position: i,
-            isDraggedTask: t.id === taskId,
-        }));
+        const updates = colTasks.map((t, i) => ({ id: t.id, status: newStatus, position: i, isDraggedTask: t.id === taskId }));
         setBoardData({ ...boardData, tasks: updatedTasks });
         vscode.postMessage({ command: "reorderTasks", updates });
         draggedTaskRef.current = null;
         dragOverTaskRef.current = null;
     };
-    // --- CRUD TAREAS ---
-    const openAddTaskForm = (colId) => {
-        setAddingTaskColId(colId);
-        setNewTaskTitle("");
-        setNewTaskDesc("");
-        setNewTaskLabels([]);
-    };
-    const submitNewTask = () => {
-        if (!newTaskTitle.trim() || !addingTaskColId)
-            return;
-        vscode.postMessage({
-            command: "createTask",
-            title: newTaskTitle,
-            description: newTaskDesc,
-            targetColId: addingTaskColId,
-            labelIds: newTaskLabels,
-        });
-        setAddingTaskColId(null);
-    };
-    const startEditingTask = (task) => {
-        setEditingTaskId(task.id);
-        setEditTitle(task.title);
-        setEditDesc(task.description);
-        setEditLabelIds(task.labelIds || []);
-    };
-    const saveEditTask = () => {
-        if (!editTitle.trim() || !editingTaskId)
-            return;
-        vscode.postMessage({
-            command: "editTask",
-            taskId: editingTaskId,
-            title: editTitle,
-            description: editDesc,
-            labelIds: editLabelIds,
-        });
-        setEditingTaskId(null);
-    };
-    const toggleLabelSelection = (labelId, current, setter) => {
-        if (current.includes(labelId))
-            setter(current.filter((id) => id !== labelId));
-        else
-            setter([...current, labelId]);
-    };
-    // --- CRUD COLUMNAS ---
-    const submitNewColumn = () => {
-        if (!newColTitle.trim())
-            return;
-        vscode.postMessage({
-            command: "createColumn",
-            title: newColTitle,
-            color: newColColor,
-        });
-        setIsAddingColumn(false);
-        setNewColTitle("");
-    };
-    const startEditingColumn = (col) => {
-        setEditingColId(col.id);
-        setEditColTitle(col.title);
-        setEditColColor(col.color);
-    };
-    const saveEditColumn = () => {
-        if (!editColTitle.trim() || !editingColId)
-            return;
-        vscode.postMessage({
-            command: "editColumn",
-            colId: editingColId,
-            title: editColTitle,
-            color: editColColor,
-        });
-        setEditingColId(null);
-    };
-    const moveColumn = (colId, direction) => {
-        if (!boardData)
-            return;
-        const cols = Object.values(boardData.columns).sort((a, b) => a.position - b.position);
-        const idx = cols.findIndex((c) => c.id === colId);
-        if (direction === "left" && idx > 0) {
-            const temp = cols[idx].position;
-            cols[idx].position = cols[idx - 1].position;
-            cols[idx - 1].position = temp;
-        }
-        else if (direction === "right" && idx < cols.length - 1) {
-            const temp = cols[idx].position;
-            cols[idx].position = cols[idx + 1].position;
-            cols[idx + 1].position = temp;
-        }
-        else
-            return;
-        const updates = cols.map((c) => ({ id: c.id, position: c.position }));
-        setBoardData({
-            ...boardData,
-            columns: Object.fromEntries(cols.map((c) => [c.id, c])),
-        });
-        vscode.postMessage({ command: "reorderColumns", updates });
-    };
-    const boardMetrics = (0, react_1.useMemo)(() => {
-        if (!boardData)
-            return null;
-        const tasks = Object.values(boardData.tasks);
-        const now = Date.now();
-        const inLast7Days = now - 7 * HOURS_24;
-        const doneColumnIds = Object.values(boardData.columns)
-            .filter((col) => /done|hecho|complet/i.test(col.title))
-            .map((col) => col.id);
-        const doneTasks = tasks.filter((task) => doneColumnIds.includes(task.status));
-        const activeTasks = tasks.filter((task) => !doneColumnIds.includes(task.status));
-        const doneInLast7Days = doneTasks.filter((task) => task.updatedAt >= inLast7Days);
-        const completionRate = tasks.length === 0 ? 0 : Math.round((doneTasks.length / tasks.length) * 100);
-        const participantsMap = new Map();
-        tasks.forEach((task) => {
-            const key = task.lastModifiedBy?.githubId || "unknown";
-            const username = task.lastModifiedBy?.username || "Unknown";
-            const current = participantsMap.get(key);
-            if (current)
-                current.updates += 1;
-            else
-                participantsMap.set(key, { username, updates: 1 });
-        });
-        const participants = Array.from(participantsMap.values()).sort((a, b) => b.updates - a.updates);
-        const avgCycleHours = doneTasks.length === 0
-            ? 0
-            : Math.round(doneTasks.reduce((acc, task) => acc + (task.updatedAt - task.createdAt), 0) /
-                doneTasks.length /
-                (1000 * 60 * 60));
-        const activitySeries = Array.from({ length: DAYS_14 }, (_, i) => {
-            const dayStart = new Date();
-            dayStart.setHours(0, 0, 0, 0);
-            dayStart.setDate(dayStart.getDate() - (DAYS_14 - 1 - i));
-            const dayEnd = dayStart.getTime() + HOURS_24;
-            const count = tasks.filter((task) => task.updatedAt >= dayStart.getTime() && task.updatedAt < dayEnd).length;
-            return {
-                label: dayStart.toLocaleDateString([], { month: "short", day: "numeric" }),
-                count,
-            };
-        });
-        const byStatus = tasks.reduce((acc, task) => {
-            const colTitle = boardData.columns[task.status]?.title || "Unknown";
-            acc[colTitle] = (acc[colTitle] || 0) + 1;
-            return acc;
-        }, {});
-        return {
-            tasks,
-            doneTasks,
-            activeTasks,
-            doneInLast7Days,
-            completionRate,
-            participants,
-            avgCycleHours,
-            activitySeries,
-            byStatus,
-        };
-    }, [boardData]);
-    // --- RENDERS ---
-    const getTasksByStatusFiltered = (status) => {
-        if (!boardData || !boardData.tasks)
-            return [];
-        return Object.values(boardData.tasks)
-            .filter((t) => t.status === status)
-            .filter((t) => !searchTerm ||
-            t.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            t.description.toLowerCase().includes(searchTerm.toLowerCase()))
-            .filter((t) => !activeFilterLabel ||
-            (t.labelIds && t.labelIds.includes(activeFilterLabel)))
-            .sort((a, b) => (a.position ?? a.createdAt) - (b.position ?? b.createdAt));
-    };
-    const renderLabelSelector = (selected, setter) => {
-        if (!boardData || !boardData.labels)
-            return null;
-        return (React.createElement("div", { style: {
-                display: "flex",
-                gap: "5px",
-                flexWrap: "wrap",
-                marginBottom: "8px",
-            } }, Object.values(boardData.labels).map((label) => {
-            const isSelected = selected.includes(label.id);
-            return (React.createElement("span", { key: label.id, onClick: () => toggleLabelSelection(label.id, selected, setter), style: {
-                    padding: "2px 8px",
-                    borderRadius: "10px",
-                    fontSize: "10px",
-                    cursor: "pointer",
-                    backgroundColor: isSelected ? label.color : "transparent",
-                    color: isSelected ? "#fff" : label.color,
-                    border: `1px solid ${label.color}`,
-                } }, label.name));
-        })));
-    };
-    const renderTaskCard = (task) => {
-        const isEditing = editingTaskId === task.id;
-        const isEdited = task.updatedAt - task.createdAt > 60000;
-        return (React.createElement("div", { key: task.id, draggable: !isEditing && !isFiltering, onDragStart: (e) => handleDragStart(e, task.id), onDragEnter: () => {
-                dragOverTaskRef.current = task.id;
-            }, style: {
-                backgroundColor: "var(--vscode-editor-background)",
-                border: "1px solid color-mix(in srgb, var(--vscode-widget-border) 80%, transparent)",
-                padding: "12px",
-                marginBottom: "10px",
-                borderRadius: "10px",
-                position: "relative",
-                opacity: isFiltering ? 0.9 : 1,
-                boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
-            } }, isEditing ? (React.createElement("div", null,
-            React.createElement("input", { autoFocus: true, value: editTitle, onChange: (e) => setEditTitle(e.target.value), style: {
-                    width: "100%",
-                    marginBottom: "8px",
-                    padding: "5px",
-                    boxSizing: "border-box",
-                } }),
-            React.createElement("textarea", { value: editDesc, onChange: (e) => setEditDesc(e.target.value), rows: 3, style: {
-                    width: "100%",
-                    marginBottom: "8px",
-                    padding: "5px",
-                    boxSizing: "border-box",
-                } }),
-            renderLabelSelector(editLabelIds, setEditLabelIds),
-            React.createElement("div", { style: {
-                    display: "flex",
-                    gap: "5px",
-                    justifyContent: "flex-end",
-                } },
-                React.createElement("button", { onClick: () => setEditingTaskId(null) }, "Cancel"),
-                React.createElement("button", { onClick: saveEditTask, style: {
-                        backgroundColor: "var(--vscode-button-background)",
-                        color: "white",
-                        border: "none",
-                        padding: "4px 8px",
-                    } }, "Save")))) : (React.createElement(React.Fragment, null,
-            React.createElement("div", { style: {
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                } },
-                React.createElement("h4", { style: {
-                        margin: "0 0 8px 0",
-                        fontSize: "14px",
-                        paddingRight: "40px",
-                        color: "var(--vscode-editor-foreground)",
-                    } }, task.title),
-                React.createElement("div", { style: {
-                        position: "absolute",
-                        top: "8px",
-                        right: "8px",
-                        display: "flex",
-                        gap: "2px",
-                    } },
-                    React.createElement("button", { className: "icon-btn", onClick: () => startEditingTask(task) }, "\u270F\uFE0F"),
-                    React.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({
-                            command: "deleteTask",
-                            taskId: task.id,
-                        }) }, "\uD83D\uDDD1\uFE0F"))),
-            task.labelIds && task.labelIds.length > 0 && (React.createElement("div", { style: {
-                    display: "flex",
-                    gap: "4px",
-                    flexWrap: "wrap",
-                    marginBottom: "8px",
-                } }, task.labelIds.map((id) => {
-                const l = boardData?.labels?.[id];
-                if (!l)
-                    return null;
-                return (React.createElement("span", { key: id, style: {
-                        backgroundColor: l.color,
-                        color: "#fff",
-                        padding: "2px 6px",
-                        borderRadius: "8px",
-                        fontSize: "10px",
-                    } }, l.name));
-            }))),
-            task.codeReference && (React.createElement("div", { onClick: () => vscode.postMessage({
-                    command: "openCode",
-                    filePath: task.codeReference.filePath,
-                    lineStart: task.codeReference.lineStart,
-                }), style: {
-                    fontSize: "10px",
-                    backgroundColor: "var(--vscode-button-secondaryBackground)",
-                    padding: "3px 6px",
-                    borderRadius: "3px",
-                    cursor: "pointer",
-                    marginBottom: "8px",
-                    display: "inline-block",
-                    color: "var(--vscode-button-secondaryForeground)",
-                } },
-                "\uD83D\uDD17 ",
-                task.codeReference.filePath.split("/").pop(),
-                " (L:",
-                " ",
-                task.codeReference.lineStart,
-                ")")),
-            React.createElement("p", { style: {
-                    fontSize: "12px",
-                    opacity: 0.8,
-                    margin: "0 0 10px 0",
-                    color: "var(--vscode-descriptionForeground)",
-                } }, task.description),
-            React.createElement("div", { style: {
-                    display: "flex",
-                    justifyContent: "space-between",
-                    fontSize: "10px",
-                    opacity: 0.6,
-                    color: "var(--vscode-textLink-foreground)",
-                } },
-                React.createElement("span", null,
-                    "\uD83D\uDC64 ",
-                    task.lastModifiedBy?.username),
-                React.createElement("div", { style: {
-                        textAlign: "right",
-                        color: "var(--vscode-descriptionForeground)",
-                    } },
-                    React.createElement("div", null,
-                        "\uD83D\uDD52 ",
-                        formatDateTime(task.createdAt)),
-                    isEdited && React.createElement("div", null,
-                        "\u270E ",
-                        formatDateTime(task.updatedAt))))))));
-    };
-    const renderLabelsManager = () => {
-        return (React.createElement("div", { style: {
-                padding: "20px",
-                backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                borderRadius: "8px",
-            } },
-            React.createElement("h2", null, "Manage Labels"),
-            React.createElement("div", { style: {
-                    display: "flex",
-                    gap: "10px",
-                    marginBottom: "20px",
-                    alignItems: "center",
-                } },
-                React.createElement("input", { type: "color", value: newLabelColor, onChange: (e) => setNewLabelColor(e.target.value) }),
-                React.createElement("input", { placeholder: "New label name...", value: newLabelName, onChange: (e) => setNewLabelName(e.target.value), style: { padding: "6px" } }),
-                React.createElement("button", { onClick: () => {
-                        if (newLabelName.trim()) {
-                            vscode.postMessage({
-                                command: "createLabel",
-                                name: newLabelName,
-                                color: newLabelColor,
-                            });
-                            setNewLabelName("");
-                        }
-                    }, style: {
-                        padding: "6px 12px",
-                        backgroundColor: "var(--vscode-button-background)",
-                        color: "white",
-                        border: "none",
-                        cursor: "pointer",
-                    } }, "Create Label")),
-            React.createElement("div", null, boardData?.labels &&
-                Object.values(boardData.labels).map((label) => (React.createElement("div", { key: label.id, style: {
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "10px",
-                        borderBottom: "1px solid var(--vscode-widget-border)",
-                    } },
-                    React.createElement("span", { style: {
-                            backgroundColor: label.color,
-                            color: "#fff",
-                            padding: "4px 10px",
-                            borderRadius: "12px",
-                            fontSize: "12px",
-                        } }, label.name),
-                    React.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({
-                            command: "deleteLabel",
-                            labelId: label.id,
-                        }) }, "\uD83D\uDDD1\uFE0F Delete")))))));
-    };
-    const renderInsights = () => {
-        if (!boardMetrics)
-            return null;
-        const maxActivity = Math.max(1, ...boardMetrics.activitySeries.map((point) => point.count));
-        return (React.createElement("div", { style: {
-                display: "flex",
-                gap: "20px",
-                flexWrap: "wrap",
-                overflowY: "auto",
-            } },
-            React.createElement("div", { style: {
-                    flex: "1 1 220px",
-                    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                    padding: "20px",
-                    borderRadius: "6px",
-                } },
-                React.createElement("div", { style: { fontSize: "11px", opacity: 0.7 } }, "Completion Rate"),
-                React.createElement("div", { style: { fontSize: "28px", fontWeight: "bold", margin: "8px 0" } },
-                    boardMetrics.completionRate,
-                    "%"),
-                React.createElement("div", { style: { fontSize: "12px", opacity: 0.7 } },
-                    boardMetrics.doneTasks.length,
-                    " / ",
-                    boardMetrics.tasks.length,
-                    " tasks done")),
-            React.createElement("div", { style: {
-                    flex: "1 1 220px",
-                    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                    padding: "20px",
-                    borderRadius: "6px",
-                } },
-                React.createElement("div", { style: { fontSize: "11px", opacity: 0.7 } }, "Tasks in progress"),
-                React.createElement("div", { style: { fontSize: "28px", fontWeight: "bold", margin: "8px 0" } }, boardMetrics.activeTasks.length),
-                React.createElement("div", { style: { fontSize: "12px", opacity: 0.7 } },
-                    boardMetrics.doneInLast7Days.length,
-                    " completadas \u00FAltimos 7 d\u00EDas")),
-            React.createElement("div", { style: {
-                    flex: "1 1 220px",
-                    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                    padding: "20px",
-                    borderRadius: "6px",
-                } },
-                React.createElement("div", { style: { fontSize: "11px", opacity: 0.7 } }, "Team participants"),
-                React.createElement("div", { style: { fontSize: "28px", fontWeight: "bold", margin: "8px 0" } }, boardMetrics.participants.length),
-                React.createElement("div", { style: { fontSize: "12px", opacity: 0.7 } }, "Basado en actividad reciente del board")),
-            React.createElement("div", { style: {
-                    flex: "1 1 220px",
-                    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                    padding: "20px",
-                    borderRadius: "6px",
-                } },
-                React.createElement("div", { style: { fontSize: "11px", opacity: 0.7 } }, "Avg cycle time"),
-                React.createElement("div", { style: { fontSize: "28px", fontWeight: "bold", margin: "8px 0" } },
-                    boardMetrics.avgCycleHours,
-                    "h"),
-                React.createElement("div", { style: { fontSize: "12px", opacity: 0.7 } }, "Promedio entre creaci\u00F3n y \u00FAltima actualizaci\u00F3n en tareas done")),
-            React.createElement("div", { style: {
-                    flex: "1 1 100%",
-                    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                    padding: "20px",
-                    borderRadius: "6px",
-                } },
-                React.createElement("h3", { style: { marginTop: 0 } }, "Project Progress"),
-                React.createElement("div", { style: {
-                        width: "100%",
-                        height: "12px",
-                        backgroundColor: "var(--vscode-editor-background)",
-                        borderRadius: "6px",
-                        overflow: "hidden",
-                    } },
-                    React.createElement("div", { style: {
-                            width: `${boardMetrics.completionRate}%`,
-                            height: "100%",
-                            backgroundColor: "var(--vscode-button-background)",
-                        } }))),
-            React.createElement("div", { style: {
-                    flex: "1 1 300px",
-                    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                    padding: "20px",
-                    borderRadius: "6px",
-                } },
-                React.createElement("h3", { style: { marginTop: 0 } }, "Status Breakdown"),
-                React.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, Object.entries(boardMetrics.byStatus).map(([status, count]) => (React.createElement("li", { key: status, style: {
-                        padding: "8px 0",
-                        borderBottom: "1px solid var(--vscode-widget-border)",
-                    } },
-                    status,
-                    ": ",
-                    React.createElement("strong", null, count)))))),
-            React.createElement("div", { style: {
-                    flex: "2 1 500px",
-                    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                    padding: "20px",
-                    borderRadius: "6px",
-                } },
-                React.createElement("h3", { style: { marginTop: 0 } }, "Task Activity (last 14 days)"),
-                React.createElement("div", { style: { display: "flex", gap: "8px", alignItems: "flex-end", height: "120px" } }, boardMetrics.activitySeries.map((point) => (React.createElement("div", { key: point.label, style: { flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" } },
-                    React.createElement("div", { title: `${point.label}: ${point.count}`, style: {
-                            width: "100%",
-                            borderRadius: "4px 4px 0 0",
-                            minHeight: "4px",
-                            height: `${Math.max((point.count / maxActivity) * 90, 4)}px`,
-                            backgroundColor: "var(--vscode-button-background)",
-                            opacity: point.count === 0 ? 0.3 : 0.95,
-                        } }),
-                    React.createElement("span", { style: { fontSize: "9px", opacity: 0.7 } }, point.label)))))),
-            React.createElement("div", { style: {
-                    flex: "1 1 300px",
-                    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                    padding: "20px",
-                    borderRadius: "6px",
-                } },
-                React.createElement("h3", { style: { marginTop: 0 } }, "Participants"),
-                boardMetrics.participants.length === 0 ? (React.createElement("div", { style: { opacity: 0.7 } }, "Sin actividad registrada todav\u00EDa.")) : (React.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } }, boardMetrics.participants.slice(0, 8).map((person) => (React.createElement("li", { key: person.username, style: {
-                        display: "flex",
-                        justifyContent: "space-between",
-                        borderBottom: "1px solid var(--vscode-widget-border)",
-                        padding: "8px 0",
-                    } },
-                    React.createElement("span", null,
-                        "\uD83D\uDC64 ",
-                        person.username),
-                    React.createElement("strong", null,
-                        person.updates,
-                        " updates")))))))));
-    };
-    return (React.createElement("div", { style: {
-            padding: "18px 20px",
-            height: "100vh",
-            display: "flex",
-            flexDirection: "column",
-            boxSizing: "border-box",
-            background: "linear-gradient(180deg, var(--vscode-editor-background) 0%, var(--vscode-sideBar-background) 100%)",
-        } },
-        React.createElement("div", { style: {
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "16px",
-                borderBottom: "1px solid var(--vscode-widget-border)",
-                paddingBottom: "12px",
-                flexShrink: 0,
-                flexWrap: "wrap",
-                gap: "12px",
-            } },
-            React.createElement("div", { style: { display: "flex", gap: "15px", alignItems: "center" } },
-                React.createElement("h1", { style: { margin: 0, color: "var(--vscode-textLink-foreground)", letterSpacing: "0.3px" } }, "\uD83D\uDE80 Lynvo"),
-                React.createElement("button", { onClick: () => setActiveView("board"), style: {
-                        background: activeView === "board"
-                            ? "var(--vscode-button-background)"
-                            : "transparent",
-                        color: activeView === "board" ? "white" : "var(--vscode-foreground)",
-                        border: "1px solid var(--vscode-widget-border)",
-                        padding: "6px 12px",
-                        borderRadius: "999px",
-                        cursor: "pointer",
-                    } }, "Board"),
-                React.createElement("button", { onClick: () => setActiveView("insights"), style: {
-                        background: activeView === "insights"
-                            ? "var(--vscode-button-background)"
-                            : "transparent",
-                        color: activeView === "insights"
-                            ? "white"
-                            : "var(--vscode-foreground)",
-                        border: "1px solid var(--vscode-widget-border)",
-                        padding: "6px 12px",
-                        borderRadius: "999px",
-                        cursor: "pointer",
-                    } }, "Insights"),
-                React.createElement("button", { onClick: () => setActiveView("labels"), style: {
-                        background: activeView === "labels"
-                            ? "var(--vscode-button-background)"
-                            : "transparent",
-                        color: activeView === "labels" ? "white" : "var(--vscode-foreground)",
-                        border: "1px solid var(--vscode-widget-border)",
-                        padding: "6px 12px",
-                        borderRadius: "999px",
-                        cursor: "pointer",
-                    } }, "Labels"),
-                React.createElement("button", { onClick: triggerSync, disabled: isSyncing, style: {
-                        marginLeft: "4px",
-                        padding: "6px 12px",
-                        borderRadius: "999px",
-                        cursor: isSyncing ? "wait" : "pointer",
-                        backgroundColor: "var(--vscode-button-secondaryBackground)",
-                        color: "var(--vscode-button-secondaryForeground)",
-                        border: "1px solid var(--vscode-widget-border)",
-                        fontWeight: "bold",
-                    } }, isSyncing ? "⏳ Syncing..." : "☁️ Sync Team"),
-                boardMetrics && (React.createElement("span", { style: {
-                        marginLeft: "6px",
-                        fontSize: "11px",
-                        opacity: 0.8,
-                        border: "1px solid var(--vscode-widget-border)",
-                        borderRadius: "999px",
-                        padding: "5px 10px",
-                    } },
-                    boardMetrics.tasks.length,
-                    " tasks \u00B7 ",
-                    boardMetrics.participants.length,
-                    " participantes"))),
-            activeView === "board" && (React.createElement("div", { style: { display: "flex", gap: "10px", alignItems: "center" } },
-                React.createElement("input", { placeholder: "\uD83D\uDD0D Search tasks...", value: searchTerm, onChange: (e) => setSearchTerm(e.target.value), style: { padding: "6px", width: "200px" } }),
-                React.createElement("select", { value: activeFilterLabel, onChange: (e) => setActiveFilterLabel(e.target.value), style: { padding: "6px" } },
-                    React.createElement("option", { value: "" }, "\uD83C\uDFF7\uFE0F All Labels"),
-                    boardData?.labels &&
-                        Object.values(boardData.labels).map((l) => (React.createElement("option", { key: l.id, value: l.id }, l.name)))),
-                isFiltering && (React.createElement("span", { style: {
-                        fontSize: "10px",
-                        color: "var(--vscode-editorWarning-foreground)",
-                    } }, "Drag & Drop disabled"))))),
-        boardData && activeView === "board" && (React.createElement("div", { style: {
-                display: "flex",
-                gap: "20px",
-                flex: 1,
-                overflowX: "auto",
-                alignItems: "flex-start",
-                paddingBottom: "20px",
-            } },
-            Object.values(boardData.columns)
-                .sort((a, b) => a.position - b.position)
-                .map((col) => (React.createElement("div", { key: col.id, onDragOver: (e) => e.preventDefault(), onDrop: (e) => handleDrop(e, col.id), onDragEnter: () => {
-                    dragOverTaskRef.current = null;
-                }, style: {
-                    flex: "0 0 320px",
-                    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                    padding: "15px",
-                    borderRadius: "12px",
-                    height: "100%",
-                    overflowY: "auto",
-                    borderTop: `4px solid ${col.color}`,
-                    border: "1px solid var(--vscode-widget-border)",
-                    boxSizing: "border-box",
-                } },
-                editingColId === col.id ? (React.createElement("div", { style: {
-                        display: "flex",
-                        gap: "5px",
-                        marginBottom: "15px",
-                        alignItems: "center",
-                        backgroundColor: "var(--vscode-editor-background)",
-                        padding: "8px",
-                        borderRadius: "6px",
-                    } },
-                    React.createElement("button", { className: "icon-btn", onClick: () => moveColumn(col.id, "left") }, "<"),
-                    React.createElement("input", { type: "color", value: editColColor, onChange: (e) => setEditColColor(e.target.value), title: "Pick column color" }),
-                    React.createElement("input", { value: editColTitle, onChange: (e) => setEditColTitle(e.target.value), style: { flex: 1, padding: "4px", width: "100px" } }),
-                    React.createElement("button", { className: "icon-btn", onClick: () => moveColumn(col.id, "right") }, ">"),
-                    React.createElement("button", { className: "icon-btn", onClick: saveEditColumn }, "\uD83D\uDCBE"),
-                    React.createElement("button", { className: "icon-btn", onClick: () => setEditingColId(null) }, "\u274C"))) : (React.createElement("div", { style: {
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "15px",
-                        position: "sticky",
-                        top: 0,
-                        backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                        zIndex: 1,
-                        paddingBottom: "10px",
-                        borderBottom: "1px solid var(--vscode-widget-border)",
-                    } },
+    return (React.createElement("div", { style: { padding: 18, height: "100vh", display: "flex", flexDirection: "column", background: "linear-gradient(180deg, var(--vscode-editor-background) 0%, var(--vscode-sideBar-background) 100%)" } },
+        React.createElement("div", { style: { display: "flex", justifyContent: "space-between", marginBottom: 16, borderBottom: "1px solid var(--vscode-widget-border)", paddingBottom: 12, flexWrap: "wrap", gap: 12 } },
+            React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } },
+                React.createElement("h1", { style: { margin: 0 } }, "\uD83D\uDE80 Lynvo"),
+                ["board", "insights", "labels"].map((view) => React.createElement("button", { key: view, onClick: () => setActiveView(view), style: { background: activeView === view ? "var(--vscode-button-background)" : "transparent", color: activeView === view ? "white" : "inherit", border: "1px solid var(--vscode-widget-border)", borderRadius: 999, padding: "6px 12px" } }, view)),
+                React.createElement("button", { onClick: () => { setIsSyncing(true); vscode.postMessage({ command: "syncBoard" }); }, disabled: isSyncing, style: { borderRadius: 999, padding: "6px 12px" } }, isSyncing ? "⏳ Syncing..." : "☁️ Sync Team"),
+                React.createElement("button", { onClick: () => vscode.postMessage({ command: "archiveCompletedTasks" }), style: { borderRadius: 999, padding: "6px 12px" } }, "\uD83D\uDDC4\uFE0F Archive Done")),
+            activeView === "board" && (React.createElement("div", { style: { display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" } },
+                React.createElement("input", { placeholder: "\uD83D\uDD0D Search", value: searchTerm, onChange: (e) => setSearchTerm(e.target.value), style: { padding: 6 } }),
+                React.createElement("select", { value: activeFilterLabel, onChange: (e) => setActiveFilterLabel(e.target.value) },
+                    React.createElement("option", { value: "" }, "\uD83C\uDFF7\uFE0F Labels"),
+                    boardData?.labels && Object.values(boardData.labels).map((l) => React.createElement("option", { key: l.id, value: l.id }, l.name))),
+                React.createElement("select", { value: activePriority, onChange: (e) => setActivePriority(e.target.value) },
+                    React.createElement("option", { value: "" }, "\u26A1 Priority"),
+                    React.createElement("option", { value: "high" }, "High"),
+                    React.createElement("option", { value: "medium" }, "Medium"),
+                    React.createElement("option", { value: "low" }, "Low")),
+                React.createElement("select", { value: sortMode, onChange: (e) => setSortMode(e.target.value) },
+                    React.createElement("option", { value: "manual" }, "Manual"),
+                    React.createElement("option", { value: "updated" }, "Updated"),
+                    React.createElement("option", { value: "priority" }, "Priority")),
+                React.createElement("button", { onClick: () => setShowArchived((v) => !v) }, showArchived ? "Showing archived" : "Show archived")))),
+        boardData && activeView === "board" && (React.createElement("div", { style: { display: "flex", gap: 16, overflowX: "auto", flex: 1, paddingBottom: 16 } },
+            Object.values(boardData.columns).sort((a, b) => a.position - b.position).map((col) => (React.createElement("div", { key: col.id, onDragOver: (e) => e.preventDefault(), onDrop: (e) => handleDrop(e, col.id), onDragEnter: () => { dragOverTaskRef.current = null; }, style: { flex: "0 0 320px", background: "var(--vscode-editor-inactiveSelectionBackground)", border: "1px solid var(--vscode-widget-border)", borderTop: `4px solid ${col.color}`, borderRadius: 10, padding: 12, overflowY: "auto" } },
+                editingColId === col.id ? (React.createElement("div", { style: { display: "flex", gap: 6, marginBottom: 10 } },
+                    React.createElement("button", { onClick: () => {
+                            const cols = Object.values(boardData.columns).sort((a, b) => a.position - b.position);
+                            const idx = cols.findIndex((c) => c.id === col.id);
+                            if (idx > 0) {
+                                [cols[idx].position, cols[idx - 1].position] = [cols[idx - 1].position, cols[idx].position];
+                                vscode.postMessage({ command: "reorderColumns", updates: cols.map((c) => ({ id: c.id, position: c.position })) });
+                            }
+                        } }, "<"),
+                    React.createElement("input", { type: "color", value: editColColor, onChange: (e) => setEditColColor(e.target.value) }),
+                    React.createElement("input", { value: editColTitle, onChange: (e) => setEditColTitle(e.target.value), style: { flex: 1 } }),
+                    React.createElement("button", { onClick: () => {
+                            if (!editColTitle.trim() || !editingColId)
+                                return;
+                            vscode.postMessage({ command: "editColumn", colId: editingColId, title: editColTitle, color: editColColor });
+                            setEditingColId(null);
+                        } }, "\uD83D\uDCBE"),
+                    React.createElement("button", { onClick: () => setEditingColId(null) }, "\u2716"))) : (React.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 } },
                     React.createElement("h3", { style: { margin: 0 } }, col.title),
-                    React.createElement("div", { style: { display: "flex", gap: "5px" } },
-                        React.createElement("button", { className: "icon-btn", onClick: () => startEditingColumn(col) }, "\u270F\uFE0F"),
-                        React.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({
-                                command: "deleteColumn",
-                                colId: col.id,
-                            }) }, "\uD83D\uDDD1\uFE0F")))),
-                addingTaskColId === col.id ? (React.createElement("div", { style: {
-                        marginBottom: "15px",
-                        padding: "10px",
-                        backgroundColor: "var(--vscode-editor-background)",
-                        borderRadius: "6px",
-                        border: "1px solid var(--vscode-focusBorder)",
-                    } },
-                    React.createElement("input", { autoFocus: true, placeholder: "Task title...", value: newTaskTitle, onChange: (e) => setNewTaskTitle(e.target.value), style: {
-                            width: "100%",
-                            marginBottom: "8px",
-                            padding: "5px",
-                            boxSizing: "border-box",
-                        } }),
-                    React.createElement("textarea", { placeholder: "Description (optional)...", value: newTaskDesc, onChange: (e) => setNewTaskDesc(e.target.value), rows: 2, style: {
-                            width: "100%",
-                            marginBottom: "8px",
-                            padding: "5px",
-                            boxSizing: "border-box",
-                        } }),
+                    React.createElement("div", null,
+                        React.createElement("button", { className: "icon-btn", onClick: () => { setEditingColId(col.id); setEditColTitle(col.title); setEditColColor(col.color); } }, "\u270F\uFE0F"),
+                        React.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({ command: "deleteColumn", colId: col.id }) }, "\uD83D\uDDD1\uFE0F")))),
+                addingTaskColId === col.id ? (React.createElement("div", { style: { marginBottom: 12, padding: 10, border: "1px solid var(--vscode-focusBorder)", borderRadius: 6 } },
+                    React.createElement("input", { autoFocus: true, placeholder: "Task title", value: newTaskTitle, onChange: (e) => setNewTaskTitle(e.target.value), style: { width: "100%", marginBottom: 8 } }),
+                    React.createElement("textarea", { placeholder: "Description", value: newTaskDesc, onChange: (e) => setNewTaskDesc(e.target.value), rows: 2, style: { width: "100%", marginBottom: 8 } }),
+                    taskEditorExtras(newTaskPriority, setNewTaskPriority, newTaskDueDate, setNewTaskDueDate),
                     renderLabelSelector(newTaskLabels, setNewTaskLabels),
-                    React.createElement("div", { style: { display: "flex", gap: "5px" } },
+                    React.createElement("div", { style: { display: "flex", gap: 5 } },
                         React.createElement("button", { onClick: () => setAddingTaskColId(null), style: { flex: 1 } }, "Cancel"),
-                        React.createElement("button", { onClick: submitNewTask, style: {
-                                flex: 1,
-                                backgroundColor: "var(--vscode-button-background)",
-                                color: "white",
-                                border: "none",
-                            } }, "Save")))) : (!isFiltering && (React.createElement("button", { onClick: () => openAddTaskForm(col.id), style: {
-                        width: "100%",
-                        padding: "6px",
-                        marginBottom: "15px",
-                        background: "transparent",
-                        border: "1px dashed var(--vscode-widget-border)",
-                        color: "var(--vscode-foreground)",
-                        cursor: "pointer",
-                        borderRadius: "4px",
-                    } }, "+ Add Task here"))),
+                        React.createElement("button", { onClick: () => {
+                                if (!newTaskTitle.trim())
+                                    return;
+                                vscode.postMessage({ command: "createTask", title: newTaskTitle, description: newTaskDesc, targetColId: col.id, labelIds: newTaskLabels, priority: newTaskPriority, dueDate: fromInputDate(newTaskDueDate) });
+                                setAddingTaskColId(null);
+                            }, style: { flex: 1, background: "var(--vscode-button-background)", color: "white", border: "none" } }, "Save")))) : (!isFiltering && React.createElement("button", { onClick: () => { setAddingTaskColId(col.id); setNewTaskTitle(""); setNewTaskDesc(""); setNewTaskLabels([]); setNewTaskPriority("medium"); setNewTaskDueDate(""); }, style: { width: "100%", marginBottom: 12 } }, "+ Add Task")),
                 getTasksByStatusFiltered(col.id).map(renderTaskCard)))),
-            React.createElement("div", { style: { flex: "0 0 250px" } }, isAddingColumn ? (React.createElement("div", { style: {
-                    backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                    padding: "15px",
-                    borderRadius: "8px",
-                } },
-                React.createElement("div", { style: { display: "flex", gap: "10px", marginBottom: "10px" } },
+            React.createElement("div", { style: { flex: "0 0 240px" } }, isAddingColumn ? (React.createElement("div", { style: { padding: 12, border: "1px solid var(--vscode-widget-border)", borderRadius: 8 } },
+                React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 8 } },
                     React.createElement("input", { type: "color", value: newColColor, onChange: (e) => setNewColColor(e.target.value) }),
-                    React.createElement("input", { autoFocus: true, placeholder: "Column Name", value: newColTitle, onChange: (e) => setNewColTitle(e.target.value), style: { flex: 1, padding: "4px" } })),
-                React.createElement("div", { style: { display: "flex", gap: "5px" } },
+                    React.createElement("input", { autoFocus: true, placeholder: "Column name", value: newColTitle, onChange: (e) => setNewColTitle(e.target.value), style: { flex: 1 } })),
+                React.createElement("div", { style: { display: "flex", gap: 5 } },
                     React.createElement("button", { onClick: () => setIsAddingColumn(false), style: { flex: 1 } }, "Cancel"),
-                    React.createElement("button", { onClick: submitNewColumn, style: {
-                            flex: 1,
-                            backgroundColor: "var(--vscode-button-background)",
-                            color: "white",
-                            border: "none",
-                        } }, "Create")))) : (React.createElement("button", { onClick: () => setIsAddingColumn(true), style: {
-                    width: "100%",
-                    padding: "15px",
-                    background: "var(--vscode-button-secondaryBackground)",
-                    color: "var(--vscode-button-secondaryForeground)",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontWeight: "bold",
-                } }, "+ Add another column"))))),
-        boardData && activeView === "insights" && renderInsights(),
-        boardData && activeView === "labels" && renderLabelsManager()));
+                    React.createElement("button", { onClick: () => { if (newColTitle.trim()) {
+                            vscode.postMessage({ command: "createColumn", title: newColTitle, color: newColColor });
+                            setIsAddingColumn(false);
+                            setNewColTitle("");
+                        } }, style: { flex: 1 } }, "Create")))) : (React.createElement("button", { onClick: () => setIsAddingColumn(true), style: { width: "100%", padding: 14 } }, "+ Add Column"))))),
+        boardData && activeView === "insights" && boardMetrics && (React.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 } },
+            React.createElement("div", { style: { padding: 16, border: "1px solid var(--vscode-widget-border)", borderRadius: 8 } },
+                "Completion: ",
+                React.createElement("strong", null,
+                    boardMetrics.completionRate,
+                    "%")),
+            React.createElement("div", { style: { padding: 16, border: "1px solid var(--vscode-widget-border)", borderRadius: 8 } },
+                "Overdue: ",
+                React.createElement("strong", null, boardMetrics.overdueTasks.length)),
+            React.createElement("div", { style: { padding: 16, border: "1px solid var(--vscode-widget-border)", borderRadius: 8 } },
+                "Avg cycle: ",
+                React.createElement("strong", null,
+                    boardMetrics.avgCycleHours,
+                    "h")),
+            React.createElement("div", { style: { padding: 16, border: "1px solid var(--vscode-widget-border)", borderRadius: 8 } },
+                "Done (7d): ",
+                React.createElement("strong", null, boardMetrics.doneInLast7Days.length)),
+            React.createElement("div", { style: { gridColumn: "1 / -1", padding: 16, border: "1px solid var(--vscode-widget-border)", borderRadius: 8 } },
+                React.createElement("h3", { style: { marginTop: 0 } }, "Activity 14 days"),
+                React.createElement("div", { style: { display: "flex", alignItems: "flex-end", height: 100, gap: 6 } }, boardMetrics.activitySeries.map((p) => {
+                    const max = Math.max(1, ...boardMetrics.activitySeries.map((s) => s.count));
+                    return React.createElement("div", { key: p.label, title: `${p.label}: ${p.count}`, style: { flex: 1, height: `${Math.max((p.count / max) * 90, 4)}px`, background: "var(--vscode-button-background)", opacity: p.count ? 1 : 0.3 } });
+                }))))),
+        boardData && activeView === "labels" && (React.createElement("div", { style: { padding: 20, border: "1px solid var(--vscode-widget-border)", borderRadius: 8 } },
+            React.createElement("h2", null, "Manage Labels"),
+            React.createElement("div", { style: { display: "flex", gap: 8, marginBottom: 12 } },
+                React.createElement("input", { type: "color", value: newLabelColor, onChange: (e) => setNewLabelColor(e.target.value) }),
+                React.createElement("input", { placeholder: "New label", value: newLabelName, onChange: (e) => setNewLabelName(e.target.value) }),
+                React.createElement("button", { onClick: () => { if (newLabelName.trim()) {
+                        vscode.postMessage({ command: "createLabel", name: newLabelName, color: newLabelColor });
+                        setNewLabelName("");
+                    } } }, "Create")),
+            boardData.labels && Object.values(boardData.labels).map((label) => (React.createElement("div", { key: label.id, style: { display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid var(--vscode-widget-border)" } },
+                React.createElement("span", { style: { background: label.color, color: "#fff", borderRadius: 999, padding: "4px 10px" } }, label.name),
+                React.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({ command: "deleteLabel", labelId: label.id }) }, "\uD83D\uDDD1\uFE0F Delete"))))))));
 };
 exports.App = App;
 

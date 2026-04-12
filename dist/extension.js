@@ -258,12 +258,39 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.DataManager = void 0;
-// src/providers/DataManager.ts
 const vscode = __importStar(__webpack_require__(/*! vscode */ "vscode"));
 const AuthProvider_1 = __webpack_require__(/*! ./AuthProvider */ "./src/providers/AuthProvider.ts");
 class DataManager {
     static FILENAME = "lynvo.json";
     static FOLDER = ".vscode";
+    static getDefaultColumns() {
+        return {
+            todo: {
+                id: "todo",
+                title: "📋 To Do",
+                color: "var(--vscode-charts-blue)",
+                position: 0,
+            },
+            "in-progress": {
+                id: "in-progress",
+                title: "⏳ In Progress",
+                color: "var(--vscode-charts-yellow)",
+                position: 1,
+            },
+            done: {
+                id: "done",
+                title: "✅ Done",
+                color: "var(--vscode-charts-green)",
+                position: 2,
+            },
+        };
+    }
+    static getDefaultLabels() {
+        return {
+            bug: { id: "bug", name: "Bug", color: "#f85149" },
+            feat: { id: "feat", name: "Feature", color: "#a371f7" },
+        };
+    }
     static getFileUri() {
         const workspaceFolders = vscode.workspace.workspaceFolders;
         if (!workspaceFolders || workspaceFolders.length === 0)
@@ -276,6 +303,49 @@ class DataManager {
             return undefined;
         return vscode.Uri.joinPath(workspaceFolders[0].uri, this.FOLDER);
     }
+    static normalizeBoard(board) {
+        let changed = false;
+        if (!board.columns || Object.keys(board.columns).length === 0) {
+            board.columns = this.getDefaultColumns();
+            changed = true;
+        }
+        if (!board.labels) {
+            board.labels = this.getDefaultLabels();
+            changed = true;
+        }
+        const sortedColumns = Object.values(board.columns).sort((a, b) => a.position - b.position);
+        sortedColumns.forEach((col, idx) => {
+            if (col.position !== idx) {
+                col.position = idx;
+                changed = true;
+            }
+        });
+        const firstColumnId = sortedColumns[0]?.id;
+        if (firstColumnId) {
+            for (const task of Object.values(board.tasks || {})) {
+                if (!board.columns[task.status]) {
+                    task.status = firstColumnId;
+                    changed = true;
+                }
+                if (!task.priority) {
+                    task.priority = "medium";
+                    changed = true;
+                }
+                if (task.archived === undefined) {
+                    task.archived = false;
+                    changed = true;
+                }
+            }
+        }
+        if (!board.version || board.version !== "1.2.0") {
+            board.version = "1.2.0";
+            changed = true;
+        }
+        if (changed) {
+            // guardado fuera, solo devolvemos estado normalizado
+        }
+        return board;
+    }
     static async initializeBoard() {
         const fileUri = this.getFileUri();
         if (!fileUri)
@@ -283,68 +353,16 @@ class DataManager {
         try {
             await vscode.workspace.fs.stat(fileUri);
             const board = await this.loadBoard();
-            let changed = false;
-            if (board && !board.columns) {
-                board.columns = {
-                    todo: {
-                        id: "todo",
-                        title: "📋 To Do",
-                        color: "var(--vscode-charts-blue)",
-                        position: 0,
-                    },
-                    "in-progress": {
-                        id: "in-progress",
-                        title: "⏳ In Progress",
-                        color: "var(--vscode-charts-yellow)",
-                        position: 1,
-                    },
-                    done: {
-                        id: "done",
-                        title: "✅ Done",
-                        color: "var(--vscode-charts-green)",
-                        position: 2,
-                    },
-                };
-                changed = true;
+            if (board) {
+                await this.saveBoard(this.normalizeBoard(board));
             }
-            if (board && !board.labels) {
-                board.labels = {
-                    bug: { id: "bug", name: "Bug", color: "#f85149" },
-                    feat: { id: "feat", name: "Feature", color: "#a371f7" },
-                };
-                changed = true;
-            }
-            if (changed && board)
-                await this.saveBoard(board);
         }
-        catch (error) {
+        catch {
             const initialData = {
-                version: "1.1.0",
-                columns: {
-                    todo: {
-                        id: "todo",
-                        title: "📋 To Do",
-                        color: "var(--vscode-charts-blue)",
-                        position: 0,
-                    },
-                    "in-progress": {
-                        id: "in-progress",
-                        title: "⏳ In Progress",
-                        color: "var(--vscode-charts-yellow)",
-                        position: 1,
-                    },
-                    done: {
-                        id: "done",
-                        title: "✅ Done",
-                        color: "var(--vscode-charts-green)",
-                        position: 2,
-                    },
-                },
+                version: "1.2.0",
+                columns: this.getDefaultColumns(),
                 tasks: {},
-                labels: {
-                    bug: { id: "bug", name: "Bug", color: "#f85149" },
-                    feat: { id: "feat", name: "Feature", color: "#a371f7" },
-                },
+                labels: this.getDefaultLabels(),
             };
             await this.saveBoard(initialData);
         }
@@ -355,9 +373,10 @@ class DataManager {
             return null;
         try {
             const fileData = await vscode.workspace.fs.readFile(fileUri);
-            return JSON.parse(Buffer.from(fileData).toString("utf8"));
+            const board = JSON.parse(Buffer.from(fileData).toString("utf8"));
+            return this.normalizeBoard(board);
         }
-        catch (error) {
+        catch {
             return null;
         }
     }
@@ -370,142 +389,182 @@ class DataManager {
         const data = Buffer.from(JSON.stringify(board, null, 2), "utf8");
         await vscode.workspace.fs.writeFile(fileUri, data);
     }
-    static async updateTaskStatus(taskId, newStatus) {
-        const board = await this.loadBoard();
-        if (!board || !board.tasks[taskId])
-            return;
-        const user = await AuthProvider_1.AuthProvider.getGitHubUser();
-        board.tasks[taskId].status = newStatus;
-        board.tasks[taskId].updatedAt = Date.now();
-        if (user)
-            board.tasks[taskId].lastModifiedBy = user;
-        await this.saveBoard(board);
-    }
-    static async reorderTasks(updates) {
+    static async withBoard(cb) {
         const board = await this.loadBoard();
         if (!board)
-            return;
-        const user = await AuthProvider_1.AuthProvider.getGitHubUser();
-        updates.forEach((upd) => {
-            if (board.tasks[upd.id]) {
-                board.tasks[upd.id].status = upd.status;
-                board.tasks[upd.id].position = upd.position;
-                if (upd.isDraggedTask) {
-                    board.tasks[upd.id].updatedAt = Date.now();
-                    if (user)
-                        board.tasks[upd.id].lastModifiedBy = user;
+            return null;
+        await cb(board);
+        await this.saveBoard(board);
+        return board;
+    }
+    static async updateTaskStatus(taskId, newStatus) {
+        await this.withBoard(async (board) => {
+            if (!board.tasks[taskId])
+                return;
+            const user = await AuthProvider_1.AuthProvider.getGitHubUser();
+            board.tasks[taskId].status = newStatus;
+            board.tasks[taskId].updatedAt = Date.now();
+            board.tasks[taskId].archived = false;
+            if (user)
+                board.tasks[taskId].lastModifiedBy = user;
+        });
+    }
+    static async reorderTasks(updates) {
+        await this.withBoard(async (board) => {
+            const user = await AuthProvider_1.AuthProvider.getGitHubUser();
+            updates.forEach((upd) => {
+                if (board.tasks[upd.id]) {
+                    board.tasks[upd.id].status = upd.status;
+                    board.tasks[upd.id].position = upd.position;
+                    board.tasks[upd.id].archived = false;
+                    if (upd.isDraggedTask) {
+                        board.tasks[upd.id].updatedAt = Date.now();
+                        if (user)
+                            board.tasks[upd.id].lastModifiedBy = user;
+                    }
+                }
+            });
+        });
+    }
+    static async createTask(title, description, targetColId, labelIds = [], codeReference, priority = "medium", dueDate) {
+        await this.withBoard(async (board) => {
+            const user = await AuthProvider_1.AuthProvider.getGitHubUser();
+            const taskId = `task-${Date.now()}`;
+            let status = targetColId;
+            if (!status) {
+                const sortedCols = Object.values(board.columns).sort((a, b) => a.position - b.position);
+                status = sortedCols.length > 0 ? sortedCols[0].id : "todo";
+            }
+            board.tasks[taskId] = {
+                id: taskId,
+                title,
+                description,
+                status,
+                createdBy: user || { githubId: "unknown", username: "Unknown" },
+                lastModifiedBy: user || { githubId: "unknown", username: "Unknown" },
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                codeReference,
+                position: Date.now(),
+                labelIds,
+                priority,
+                dueDate,
+                archived: false,
+            };
+        });
+    }
+    static async editTask(taskId, title, description, labelIds = [], priority = "medium", dueDate) {
+        await this.withBoard(async (board) => {
+            if (!board.tasks[taskId])
+                return;
+            const user = await AuthProvider_1.AuthProvider.getGitHubUser();
+            board.tasks[taskId].title = title;
+            board.tasks[taskId].description = description;
+            board.tasks[taskId].labelIds = labelIds;
+            board.tasks[taskId].priority = priority;
+            board.tasks[taskId].dueDate = dueDate;
+            board.tasks[taskId].updatedAt = Date.now();
+            if (user)
+                board.tasks[taskId].lastModifiedBy = user;
+        });
+    }
+    static async deleteTask(taskId) {
+        await this.withBoard((board) => {
+            delete board.tasks[taskId];
+        });
+    }
+    static async archiveCompletedTasks() {
+        let archivedCount = 0;
+        await this.withBoard((board) => {
+            const doneColumnIds = Object.values(board.columns)
+                .filter((col) => /done|hecho|complet/i.test(col.title))
+                .map((col) => col.id);
+            for (const task of Object.values(board.tasks)) {
+                if (doneColumnIds.includes(task.status) && !task.archived) {
+                    task.archived = true;
+                    archivedCount += 1;
                 }
             }
         });
-        await this.saveBoard(board);
+        return archivedCount;
     }
-    static async createTask(title, description, targetColId, labelIds = [], codeReference) {
-        const board = await this.loadBoard();
-        if (!board)
-            return;
-        const user = await AuthProvider_1.AuthProvider.getGitHubUser();
-        const taskId = "task-" + Date.now();
-        let status = targetColId;
-        if (!status) {
-            const sortedCols = Object.values(board.columns).sort((a, b) => a.position - b.position);
-            status = sortedCols.length > 0 ? sortedCols[0].id : "todo";
-        }
-        board.tasks[taskId] = {
-            id: taskId,
-            title,
-            description,
-            status,
-            createdBy: user || { githubId: "unknown", username: "Unknown" },
-            lastModifiedBy: user || { githubId: "unknown", username: "Unknown" },
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            codeReference: codeReference,
-            position: Date.now(),
-            labelIds: labelIds || [],
-        };
-        await this.saveBoard(board);
-    }
-    static async editTask(taskId, title, description, labelIds = []) {
-        const board = await this.loadBoard();
-        if (!board || !board.tasks[taskId])
-            return;
-        const user = await AuthProvider_1.AuthProvider.getGitHubUser();
-        board.tasks[taskId].title = title;
-        board.tasks[taskId].description = description;
-        board.tasks[taskId].labelIds = labelIds;
-        board.tasks[taskId].updatedAt = Date.now();
-        if (user)
-            board.tasks[taskId].lastModifiedBy = user;
-        await this.saveBoard(board);
-    }
-    static async deleteTask(taskId) {
-        const board = await this.loadBoard();
-        if (!board)
-            return;
-        delete board.tasks[taskId];
-        await this.saveBoard(board);
+    static async restoreTask(taskId) {
+        await this.withBoard((board) => {
+            if (!board.tasks[taskId])
+                return;
+            board.tasks[taskId].archived = false;
+            board.tasks[taskId].updatedAt = Date.now();
+        });
     }
     static async createColumn(title, color) {
-        const board = await this.loadBoard();
-        if (!board)
-            return;
-        const colId = "col-" + Date.now();
-        const position = Object.keys(board.columns).length;
-        board.columns[colId] = { id: colId, title, color, position };
-        await this.saveBoard(board);
+        await this.withBoard((board) => {
+            const colId = `col-${Date.now()}`;
+            const position = Object.keys(board.columns).length;
+            board.columns[colId] = { id: colId, title, color, position };
+        });
     }
     static async editColumn(id, title, color) {
-        const board = await this.loadBoard();
-        if (!board || !board.columns[id])
-            return;
-        board.columns[id].title = title;
-        board.columns[id].color = color;
-        await this.saveBoard(board);
+        await this.withBoard((board) => {
+            if (!board.columns[id])
+                return;
+            board.columns[id].title = title;
+            board.columns[id].color = color;
+        });
     }
     static async deleteColumn(id) {
-        const board = await this.loadBoard();
-        if (!board || !board.columns[id])
-            return;
-        delete board.columns[id];
-        for (const taskId in board.tasks) {
-            if (board.tasks[taskId].status === id) {
-                delete board.tasks[taskId];
+        let movedTasks = 0;
+        await this.withBoard((board) => {
+            if (!board.columns[id])
+                return;
+            const remainingColumns = Object.values(board.columns)
+                .filter((col) => col.id !== id)
+                .sort((a, b) => a.position - b.position);
+            if (remainingColumns.length === 0) {
+                return;
             }
-        }
-        await this.saveBoard(board);
+            const fallbackColId = remainingColumns[0].id;
+            for (const task of Object.values(board.tasks)) {
+                if (task.status === id) {
+                    task.status = fallbackColId;
+                    task.updatedAt = Date.now();
+                    movedTasks += 1;
+                }
+            }
+            delete board.columns[id];
+            remainingColumns.forEach((col, idx) => {
+                col.position = idx;
+            });
+        });
+        return movedTasks;
     }
     static async reorderColumns(updates) {
-        const board = await this.loadBoard();
-        if (!board)
-            return;
-        updates.forEach((upd) => {
-            if (board.columns[upd.id]) {
-                board.columns[upd.id].position = upd.position;
-            }
+        await this.withBoard((board) => {
+            updates.forEach((upd) => {
+                if (board.columns[upd.id]) {
+                    board.columns[upd.id].position = upd.position;
+                }
+            });
         });
-        await this.saveBoard(board);
     }
     static async createLabel(name, color) {
-        const board = await this.loadBoard();
-        if (!board)
-            return;
-        if (!board.labels)
-            board.labels = {};
-        const labelId = "label-" + Date.now();
-        board.labels[labelId] = { id: labelId, name, color };
-        await this.saveBoard(board);
+        await this.withBoard((board) => {
+            if (!board.labels)
+                board.labels = {};
+            const labelId = `label-${Date.now()}`;
+            board.labels[labelId] = { id: labelId, name, color };
+        });
     }
     static async deleteLabel(id) {
-        const board = await this.loadBoard();
-        if (!board || !board.labels)
-            return;
-        delete board.labels[id];
-        for (const taskId in board.tasks) {
-            if (board.tasks[taskId].labelIds) {
-                board.tasks[taskId].labelIds = board.tasks[taskId].labelIds.filter((l) => l !== id);
+        await this.withBoard((board) => {
+            if (!board.labels)
+                return;
+            delete board.labels[id];
+            for (const taskId in board.tasks) {
+                if (board.tasks[taskId].labelIds) {
+                    board.tasks[taskId].labelIds = board.tasks[taskId].labelIds.filter((l) => l !== id);
+                }
             }
-        }
-        await this.saveBoard(board);
+        });
     }
 }
 exports.DataManager = DataManager;
@@ -780,7 +839,6 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.LynvoPanel = void 0;
-// src/providers/LynvoPanel.ts
 const vscode = __importStar(__webpack_require__(/*! vscode */ "vscode"));
 const DataManager_1 = __webpack_require__(/*! ./DataManager */ "./src/providers/DataManager.ts");
 const GitService_1 = __webpack_require__(/*! ./GitService */ "./src/providers/GitService.ts");
@@ -820,18 +878,18 @@ class LynvoPanel {
         this._panel.dispose();
         while (this._disposables.length) {
             const disposable = this._disposables.pop();
-            if (disposable) {
+            if (disposable)
                 disposable.dispose();
-            }
         }
     }
     _setWebviewMessageListener(webview) {
         webview.onDidReceiveMessage(async (message) => {
             switch (message.command) {
-                case "requestData":
+                case "requestData": {
                     const board = await DataManager_1.DataManager.loadBoard();
                     webview.postMessage({ command: "loadData", data: board });
                     return;
+                }
                 case "updateTaskStatus":
                     await DataManager_1.DataManager.updateTaskStatus(message.taskId, message.newStatus);
                     LynvoPanel.refreshData();
@@ -841,19 +899,30 @@ class LynvoPanel {
                     LynvoPanel.refreshData();
                     return;
                 case "createTask":
-                    await DataManager_1.DataManager.createTask(message.title, message.description, message.targetColId, message.labelIds);
+                    await DataManager_1.DataManager.createTask(message.title, message.description, message.targetColId, message.labelIds, undefined, message.priority, message.dueDate);
                     LynvoPanel.refreshData();
                     return;
                 case "editTask":
-                    await DataManager_1.DataManager.editTask(message.taskId, message.title, message.description, message.labelIds);
+                    await DataManager_1.DataManager.editTask(message.taskId, message.title, message.description, message.labelIds, message.priority, message.dueDate);
                     LynvoPanel.refreshData();
                     return;
-                case "deleteTask":
+                case "deleteTask": {
                     const confirmTask = await vscode.window.showWarningMessage("Delete task?", { modal: true }, "Delete");
                     if (confirmTask === "Delete") {
                         await DataManager_1.DataManager.deleteTask(message.taskId);
                         LynvoPanel.refreshData();
                     }
+                    return;
+                }
+                case "archiveCompletedTasks": {
+                    const archived = await DataManager_1.DataManager.archiveCompletedTasks();
+                    vscode.window.showInformationMessage(`Lynvo: ${archived} completed task(s) archived.`);
+                    LynvoPanel.refreshData();
+                    return;
+                }
+                case "restoreTask":
+                    await DataManager_1.DataManager.restoreTask(message.taskId);
+                    LynvoPanel.refreshData();
                     return;
                 case "createColumn":
                     await DataManager_1.DataManager.createColumn(message.title, message.color);
@@ -863,13 +932,15 @@ class LynvoPanel {
                     await DataManager_1.DataManager.editColumn(message.colId, message.title, message.color);
                     LynvoPanel.refreshData();
                     return;
-                case "deleteColumn":
-                    const confirmCol = await vscode.window.showWarningMessage("Delete column? ALL TASKS inside will be deleted.", { modal: true }, "Delete");
+                case "deleteColumn": {
+                    const confirmCol = await vscode.window.showWarningMessage("Delete column? Tasks will be moved to the first column.", { modal: true }, "Delete");
                     if (confirmCol === "Delete") {
-                        await DataManager_1.DataManager.deleteColumn(message.colId);
+                        const moved = await DataManager_1.DataManager.deleteColumn(message.colId);
+                        vscode.window.showInformationMessage(`Column removed. ${moved} task(s) were moved safely.`);
                         LynvoPanel.refreshData();
                     }
                     return;
+                }
                 case "reorderColumns":
                     await DataManager_1.DataManager.reorderColumns(message.updates);
                     LynvoPanel.refreshData();
@@ -882,7 +953,7 @@ class LynvoPanel {
                     await DataManager_1.DataManager.deleteLabel(message.labelId);
                     LynvoPanel.refreshData();
                     return;
-                case "syncBoard":
+                case "syncBoard": {
                     const result = await GitService_1.GitService.syncBoard();
                     if (result.success) {
                         vscode.window.showInformationMessage(result.message);
@@ -892,7 +963,8 @@ class LynvoPanel {
                     }
                     LynvoPanel.refreshData();
                     return;
-                case "openCode":
+                }
+                case "openCode": {
                     const folders = vscode.workspace.workspaceFolders;
                     if (folders) {
                         const fileUri = vscode.Uri.joinPath(folders[0].uri, message.filePath);
@@ -903,6 +975,7 @@ class LynvoPanel {
                         editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
                     }
                     return;
+                }
             }
         }, undefined, this._disposables);
     }
@@ -910,25 +983,26 @@ class LynvoPanel {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "dist", "webview.js"));
         const nonce = getNonce();
         return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-            body { overflow-x: hidden; font-family: var(--vscode-font-family); margin: 0; color: var(--vscode-foreground); }
-            * { box-sizing: border-box; }
-            button { font-family: inherit; }
-            .icon-btn { cursor: pointer; opacity: 0.7; background: transparent; border: none; color: var(--vscode-foreground); font-size: 14px; transition: all .15s ease; border-radius: 6px; }
-            .icon-btn:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground); }
-            .icon-btn.delete:hover { color: var(--vscode-errorForeground); }
-            input, textarea, select { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 6px; }
-            input[type="color"] { -webkit-appearance: none; border: none; width: 25px; height: 25px; cursor: pointer; padding: 0; background: transparent; }
-            input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-            input[type="color"]::-webkit-color-swatch { border: 1px solid var(--vscode-widget-border); border-radius: 4px; }
-        </style></head><body><div id="root"></div><script nonce="${nonce}" src="${scriptUri}"></script></body></html>`;
+      body { overflow-x: hidden; font-family: var(--vscode-font-family); margin: 0; color: var(--vscode-foreground); }
+      * { box-sizing: border-box; }
+      button { font-family: inherit; }
+      .icon-btn { cursor: pointer; opacity: 0.7; background: transparent; border: none; color: var(--vscode-foreground); font-size: 14px; transition: all .15s ease; border-radius: 6px; }
+      .icon-btn:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground); }
+      .icon-btn.delete:hover { color: var(--vscode-errorForeground); }
+      input, textarea, select { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 6px; }
+      input[type="color"] { -webkit-appearance: none; border: none; width: 25px; height: 25px; cursor: pointer; padding: 0; background: transparent; }
+      input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+      input[type="color"]::-webkit-color-swatch { border: 1px solid var(--vscode-widget-border); border-radius: 4px; }
+    </style></head><body><div id="root"></div><script nonce="${nonce}" src="${scriptUri}"></script></body></html>`;
     }
 }
 exports.LynvoPanel = LynvoPanel;
 function getNonce() {
     let t = "";
     const p = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-    for (let i = 0; i < 32; i++)
+    for (let i = 0; i < 32; i++) {
         t += p.charAt(Math.floor(Math.random() * p.length));
+    }
     return t;
 }
 
