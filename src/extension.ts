@@ -4,14 +4,17 @@ import { AuthProvider } from "./providers/AuthProvider";
 import { LynvoPanel } from "./providers/LynvoPanel";
 import { DataManager } from "./providers/DataManager";
 import { LynvoMenuProvider } from "./providers/LynvoMenuProvider";
+import { GitService } from "./providers/GitService";
 
 export function activate(context: vscode.ExtensionContext) {
   // 1. REGISTRAMOS EL MENÚ LATERAL
   const lynvoMenuProvider = new LynvoMenuProvider();
   // Corregido: Ahora coincide exactamente con el ID de tu package.json
-  vscode.window.registerTreeDataProvider(
-    "lynvo.sidebarMenu",
-    lynvoMenuProvider,
+  context.subscriptions.push(
+    vscode.window.registerTreeDataProvider(
+      "lynvo.sidebarMenu",
+      lynvoMenuProvider,
+    ),
   );
 
   // 2. INICIALIZAMOS LA BASE DE DATOS
@@ -27,6 +30,44 @@ export function activate(context: vscode.ExtensionContext) {
           `Conectado como: ${user.username}`,
         );
       }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("lynvo.connectGitHub", async () => {
+      const user = await AuthProvider.getGitHubUser();
+      if (user) {
+        vscode.window.showInformationMessage(
+          `GitHub conectado como ${user.username}`,
+        );
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("lynvo.checkGitHubStatus", async () => {
+      const user = await AuthProvider.getCurrentGitHubUser();
+      if (user) {
+        vscode.window.showInformationMessage(
+          `Conexión activa con GitHub: ${user.username}`,
+        );
+      } else {
+        vscode.window.showWarningMessage(
+          "No hay sesión de GitHub activa. Usa “Connect GitHub”.",
+        );
+      }
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("lynvo.syncBoard", async () => {
+      const result = await GitService.syncBoard();
+      if (result.success) {
+        vscode.window.showInformationMessage(result.message);
+      } else {
+        vscode.window.showWarningMessage(result.message);
+      }
+      LynvoPanel.refreshData();
     }),
   );
 

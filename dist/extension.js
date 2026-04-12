@@ -51,11 +51,12 @@ const AuthProvider_1 = __webpack_require__(/*! ./providers/AuthProvider */ "./sr
 const LynvoPanel_1 = __webpack_require__(/*! ./providers/LynvoPanel */ "./src/providers/LynvoPanel.ts");
 const DataManager_1 = __webpack_require__(/*! ./providers/DataManager */ "./src/providers/DataManager.ts");
 const LynvoMenuProvider_1 = __webpack_require__(/*! ./providers/LynvoMenuProvider */ "./src/providers/LynvoMenuProvider.ts");
+const GitService_1 = __webpack_require__(/*! ./providers/GitService */ "./src/providers/GitService.ts");
 function activate(context) {
     // 1. REGISTRAMOS EL MENÚ LATERAL
     const lynvoMenuProvider = new LynvoMenuProvider_1.LynvoMenuProvider();
     // Corregido: Ahora coincide exactamente con el ID de tu package.json
-    vscode.window.registerTreeDataProvider("lynvo.sidebarMenu", lynvoMenuProvider);
+    context.subscriptions.push(vscode.window.registerTreeDataProvider("lynvo.sidebarMenu", lynvoMenuProvider));
     // 2. INICIALIZAMOS LA BASE DE DATOS
     DataManager_1.DataManager.initializeBoard().catch((err) => console.error("Lynvo Init Error:", err));
     context.subscriptions.push(vscode.commands.registerCommand("lynvo.testAuth", async () => {
@@ -63,6 +64,31 @@ function activate(context) {
         if (user) {
             vscode.window.showInformationMessage(`Conectado como: ${user.username}`);
         }
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand("lynvo.connectGitHub", async () => {
+        const user = await AuthProvider_1.AuthProvider.getGitHubUser();
+        if (user) {
+            vscode.window.showInformationMessage(`GitHub conectado como ${user.username}`);
+        }
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand("lynvo.checkGitHubStatus", async () => {
+        const user = await AuthProvider_1.AuthProvider.getCurrentGitHubUser();
+        if (user) {
+            vscode.window.showInformationMessage(`Conexión activa con GitHub: ${user.username}`);
+        }
+        else {
+            vscode.window.showWarningMessage("No hay sesión de GitHub activa. Usa “Connect GitHub”.");
+        }
+    }));
+    context.subscriptions.push(vscode.commands.registerCommand("lynvo.syncBoard", async () => {
+        const result = await GitService_1.GitService.syncBoard();
+        if (result.success) {
+            vscode.window.showInformationMessage(result.message);
+        }
+        else {
+            vscode.window.showWarningMessage(result.message);
+        }
+        LynvoPanel_1.LynvoPanel.refreshData();
     }));
     context.subscriptions.push(vscode.commands.registerCommand("lynvo.openBoard", () => {
         LynvoPanel_1.LynvoPanel.render(context.extensionUri);
@@ -145,15 +171,18 @@ exports.AuthProvider = void 0;
 // src/providers/AuthProvider.ts
 const vscode = __importStar(__webpack_require__(/*! vscode */ "vscode"));
 class AuthProvider {
+    static async getGitHubSession(createIfNone) {
+        return vscode.authentication.getSession("github", ["read:user"], {
+            createIfNone,
+        });
+    }
     /**
      * Solicita la sesión de GitHub a través de VS Code.
      * Si el usuario no ha iniciado sesión, VS Code le mostrará un prompt nativo.
      */
     static async getGitHubUser() {
         try {
-            // Solicitamos acceso de solo lectura al perfil de GitHub
-            // 'createIfNone: true' hace que VS Code pregunte al usuario si aún no está logueado.
-            const session = await vscode.authentication.getSession("github", ["read:user"], { createIfNone: true });
+            const session = await this.getGitHubSession(true);
             if (session) {
                 return {
                     githubId: session.account.id,
@@ -166,6 +195,20 @@ class AuthProvider {
             vscode.window.showErrorMessage("Lynvo: Se requiere iniciar sesión con GitHub para identificar los cambios.");
         }
         return undefined; // Retorna undefined si el usuario cancela o hay un error
+    }
+    static async getCurrentGitHubUser() {
+        try {
+            const session = await this.getGitHubSession(false);
+            if (!session)
+                return undefined;
+            return {
+                githubId: session.account.id,
+                username: session.account.label,
+            };
+        }
+        catch {
+            return undefined;
+        }
     }
 }
 exports.AuthProvider = AuthProvider;
@@ -226,6 +269,12 @@ class DataManager {
         if (!workspaceFolders || workspaceFolders.length === 0)
             return undefined;
         return vscode.Uri.joinPath(workspaceFolders[0].uri, this.FOLDER, this.FILENAME);
+    }
+    static getFolderUri() {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0)
+            return undefined;
+        return vscode.Uri.joinPath(workspaceFolders[0].uri, this.FOLDER);
     }
     static async initializeBoard() {
         const fileUri = this.getFileUri();
@@ -314,8 +363,10 @@ class DataManager {
     }
     static async saveBoard(board) {
         const fileUri = this.getFileUri();
-        if (!fileUri)
+        const folderUri = this.getFolderUri();
+        if (!fileUri || !folderUri)
             return;
+        await vscode.workspace.fs.createDirectory(folderUri);
         const data = Buffer.from(JSON.stringify(board, null, 2), "utf8");
         await vscode.workspace.fs.writeFile(fileUri, data);
     }
@@ -663,15 +714,22 @@ class LynvoMenuProvider {
         }
         else {
             return Promise.resolve([
-                this.createMenuItem("🚀 Open Board", "lynvo.openBoard", "Abre el tablero principal de Kanban"),
-                this.createMenuItem("➕ Add Task from Code", "lynvo.createTaskFromCode", "Crea una tarea a partir de tu selección actual"),
+                this.createMenuItem("Open Board", "lynvo.openBoard", "Abre el tablero principal", "project"),
+                this.createMenuItem("Add Task from Code", "lynvo.createTaskFromCode", "Crea una tarea desde tu selección actual", "add"),
+                this.createMenuItem("Connect GitHub", "lynvo.connectGitHub", "Inicia sesión o vincula tu cuenta de GitHub", "vm-connect"),
+                this.createMenuItem("Check GitHub Status", "lynvo.checkGitHubStatus", "Comprueba si hay sesión de GitHub activa", "account"),
+                this.createMenuItem("Sync Board", "lynvo.syncBoard", "Sincroniza el tablero con el repositorio remoto", "cloud-upload"),
             ]);
         }
     }
-    createMenuItem(label, command, tooltip) {
+    createMenuItem(label, command, tooltip, iconId) {
         const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
         item.command = { command: command, title: label };
         item.tooltip = tooltip;
+        item.description = tooltip;
+        if (iconId) {
+            item.iconPath = new vscode.ThemeIcon(iconId);
+        }
         return item;
     }
 }
@@ -852,11 +910,13 @@ class LynvoPanel {
         const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, "dist", "webview.js"));
         const nonce = getNonce();
         return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-            body { overflow-x: hidden; font-family: var(--vscode-font-family); }
-            .icon-btn { cursor: pointer; opacity: 0.6; background: transparent; border: none; color: var(--vscode-foreground); font-size: 14px; }
-            .icon-btn:hover { opacity: 1; }
+            body { overflow-x: hidden; font-family: var(--vscode-font-family); margin: 0; color: var(--vscode-foreground); }
+            * { box-sizing: border-box; }
+            button { font-family: inherit; }
+            .icon-btn { cursor: pointer; opacity: 0.7; background: transparent; border: none; color: var(--vscode-foreground); font-size: 14px; transition: all .15s ease; border-radius: 6px; }
+            .icon-btn:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground); }
             .icon-btn.delete:hover { color: var(--vscode-errorForeground); }
-            input, textarea, select { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px; }
+            input, textarea, select { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 6px; }
             input[type="color"] { -webkit-appearance: none; border: none; width: 25px; height: 25px; cursor: pointer; padding: 0; background: transparent; }
             input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
             input[type="color"]::-webkit-color-swatch { border: 1px solid var(--vscode-widget-border); border-radius: 4px; }
