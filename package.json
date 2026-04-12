@@ -25,6 +25,18 @@
         "title": "Lynvo: Open Project Board"
       },
       {
+        "command": "lynvo.connectGitHub",
+        "title": "Lynvo: Connect GitHub"
+      },
+      {
+        "command": "lynvo.checkGitHubStatus",
+        "title": "Lynvo: Check GitHub Status"
+      },
+      {
+        "command": "lynvo.syncBoard",
+        "title": "Lynvo: Sync Board"
+      },
+      {
         "command": "lynvo.createTaskFromCode",
         "title": "Lynvo: Crear Tarea desde Selección"
       }

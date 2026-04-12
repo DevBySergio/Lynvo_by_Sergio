@@ -1,6 +1,6 @@
 // src/webview/App.tsx
 import * as React from "react";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { LynvoBoard, LynvoTask, LynvoColumn, LynvoLabel } from "../types";
 
 declare const acquireVsCodeApi: () => { postMessage: (msg: any) => void };
@@ -10,6 +10,9 @@ const formatDateTime = (timestamp: number) => {
   const date = new Date(timestamp);
   return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
 };
+
+const HOURS_24 = 24 * 60 * 60 * 1000;
+const DAYS_14 = 14;
 
 export const App: React.FC = () => {
   const [boardData, setBoardData] = useState<LynvoBoard | null>(null);
@@ -217,6 +220,80 @@ export const App: React.FC = () => {
     vscode.postMessage({ command: "reorderColumns", updates });
   };
 
+  const boardMetrics = useMemo(() => {
+    if (!boardData) return null;
+
+    const tasks = Object.values(boardData.tasks);
+    const now = Date.now();
+    const inLast7Days = now - 7 * HOURS_24;
+
+    const doneColumnIds = Object.values(boardData.columns)
+      .filter((col) => /done|hecho|complet/i.test(col.title))
+      .map((col) => col.id);
+
+    const doneTasks = tasks.filter((task) => doneColumnIds.includes(task.status));
+    const activeTasks = tasks.filter((task) => !doneColumnIds.includes(task.status));
+    const doneInLast7Days = doneTasks.filter((task) => task.updatedAt >= inLast7Days);
+    const completionRate =
+      tasks.length === 0 ? 0 : Math.round((doneTasks.length / tasks.length) * 100);
+
+    const participantsMap = new Map<string, { username: string; updates: number }>();
+    tasks.forEach((task) => {
+      const key = task.lastModifiedBy?.githubId || "unknown";
+      const username = task.lastModifiedBy?.username || "Unknown";
+      const current = participantsMap.get(key);
+      if (current) current.updates += 1;
+      else participantsMap.set(key, { username, updates: 1 });
+    });
+    const participants = Array.from(participantsMap.values()).sort(
+      (a, b) => b.updates - a.updates,
+    );
+
+    const avgCycleHours =
+      doneTasks.length === 0
+        ? 0
+        : Math.round(
+            doneTasks.reduce((acc, task) => acc + (task.updatedAt - task.createdAt), 0) /
+              doneTasks.length /
+              (1000 * 60 * 60),
+          );
+
+    const activitySeries = Array.from({ length: DAYS_14 }, (_, i) => {
+      const dayStart = new Date();
+      dayStart.setHours(0, 0, 0, 0);
+      dayStart.setDate(dayStart.getDate() - (DAYS_14 - 1 - i));
+      const dayEnd = dayStart.getTime() + HOURS_24;
+      const count = tasks.filter(
+        (task) => task.updatedAt >= dayStart.getTime() && task.updatedAt < dayEnd,
+      ).length;
+      return {
+        label: dayStart.toLocaleDateString([], { month: "short", day: "numeric" }),
+        count,
+      };
+    });
+
+    const byStatus = tasks.reduce(
+      (acc, task) => {
+        const colTitle = boardData.columns[task.status]?.title || "Unknown";
+        acc[colTitle] = (acc[colTitle] || 0) + 1;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
+    return {
+      tasks,
+      doneTasks,
+      activeTasks,
+      doneInLast7Days,
+      completionRate,
+      participants,
+      avgCycleHours,
+      activitySeries,
+      byStatus,
+    };
+  }, [boardData]);
+
   // --- RENDERS ---
   const getTasksByStatusFiltered = (status: string): LynvoTask[] => {
     if (!boardData || !boardData.tasks) return [];
@@ -290,12 +367,13 @@ export const App: React.FC = () => {
         }}
         style={{
           backgroundColor: "var(--vscode-editor-background)",
-          border: "1px solid var(--vscode-widget-border)",
+          border: "1px solid color-mix(in srgb, var(--vscode-widget-border) 80%, transparent)",
           padding: "12px",
           marginBottom: "10px",
-          borderRadius: "6px",
+          borderRadius: "10px",
           position: "relative",
           opacity: isFiltering ? 0.9 : 1,
+          boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
         }}
       >
         {isEditing ? (
@@ -576,21 +654,10 @@ export const App: React.FC = () => {
   };
 
   const renderInsights = () => {
-    if (!boardData) return null;
-    const tasks = Object.values(boardData.tasks);
-    const done = tasks.filter((t) =>
-      boardData.columns[t.status]?.title.toLowerCase().includes("done"),
-    ).length;
-    const percent =
-      tasks.length === 0 ? 0 : Math.round((done / tasks.length) * 100);
-
-    const statusStats = tasks.reduce(
-      (acc, task) => {
-        const colTitle = boardData.columns[task.status]?.title || "Unknown";
-        acc[colTitle] = (acc[colTitle] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>,
+    if (!boardMetrics) return null;
+    const maxActivity = Math.max(
+      1,
+      ...boardMetrics.activitySeries.map((point) => point.count),
     );
 
     return (
@@ -604,25 +671,78 @@ export const App: React.FC = () => {
       >
         <div
           style={{
+            flex: "1 1 220px",
+            backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+            padding: "20px",
+            borderRadius: "6px",
+          }}
+        >
+          <div style={{ fontSize: "11px", opacity: 0.7 }}>Completion Rate</div>
+          <div style={{ fontSize: "28px", fontWeight: "bold", margin: "8px 0" }}>
+            {boardMetrics.completionRate}%
+          </div>
+          <div style={{ fontSize: "12px", opacity: 0.7 }}>
+            {boardMetrics.doneTasks.length} / {boardMetrics.tasks.length} tasks done
+          </div>
+        </div>
+        <div
+          style={{
+            flex: "1 1 220px",
+            backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+            padding: "20px",
+            borderRadius: "6px",
+          }}
+        >
+          <div style={{ fontSize: "11px", opacity: 0.7 }}>Tasks in progress</div>
+          <div style={{ fontSize: "28px", fontWeight: "bold", margin: "8px 0" }}>
+            {boardMetrics.activeTasks.length}
+          </div>
+          <div style={{ fontSize: "12px", opacity: 0.7 }}>
+            {boardMetrics.doneInLast7Days.length} completadas últimos 7 días
+          </div>
+        </div>
+        <div
+          style={{
+            flex: "1 1 220px",
+            backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+            padding: "20px",
+            borderRadius: "6px",
+          }}
+        >
+          <div style={{ fontSize: "11px", opacity: 0.7 }}>Team participants</div>
+          <div style={{ fontSize: "28px", fontWeight: "bold", margin: "8px 0" }}>
+            {boardMetrics.participants.length}
+          </div>
+          <div style={{ fontSize: "12px", opacity: 0.7 }}>
+            Basado en actividad reciente del board
+          </div>
+        </div>
+        <div
+          style={{
+            flex: "1 1 220px",
+            backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+            padding: "20px",
+            borderRadius: "6px",
+          }}
+        >
+          <div style={{ fontSize: "11px", opacity: 0.7 }}>Avg cycle time</div>
+          <div style={{ fontSize: "28px", fontWeight: "bold", margin: "8px 0" }}>
+            {boardMetrics.avgCycleHours}h
+          </div>
+          <div style={{ fontSize: "12px", opacity: 0.7 }}>
+            Promedio entre creación y última actualización en tareas done
+          </div>
+        </div>
+
+        <div
+          style={{
             flex: "1 1 100%",
             backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
             padding: "20px",
             borderRadius: "6px",
           }}
         >
-          <h2 style={{ marginTop: 0 }}>Project Progress</h2>
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginBottom: "8px",
-            }}
-          >
-            <span>
-              {done} of {tasks.length} tasks completed
-            </span>
-            <span style={{ fontWeight: "bold" }}>{percent}%</span>
-          </div>
+          <h3 style={{ marginTop: 0 }}>Project Progress</h3>
           <div
             style={{
               width: "100%",
@@ -634,7 +754,7 @@ export const App: React.FC = () => {
           >
             <div
               style={{
-                width: `${percent}%`,
+                width: `${boardMetrics.completionRate}%`,
                 height: "100%",
                 backgroundColor: "var(--vscode-button-background)",
               }}
@@ -651,7 +771,7 @@ export const App: React.FC = () => {
         >
           <h3 style={{ marginTop: 0 }}>Status Breakdown</h3>
           <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {Object.entries(statusStats).map(([status, count]) => (
+            {Object.entries(boardMetrics.byStatus).map(([status, count]) => (
               <li
                 key={status}
                 style={{
@@ -664,6 +784,67 @@ export const App: React.FC = () => {
             ))}
           </ul>
         </div>
+        <div
+          style={{
+            flex: "2 1 500px",
+            backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+            padding: "20px",
+            borderRadius: "6px",
+          }}
+        >
+          <h3 style={{ marginTop: 0 }}>Task Activity (last 14 days)</h3>
+          <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", height: "120px" }}>
+            {boardMetrics.activitySeries.map((point) => (
+              <div
+                key={point.label}
+                style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px" }}
+              >
+                <div
+                  title={`${point.label}: ${point.count}`}
+                  style={{
+                    width: "100%",
+                    borderRadius: "4px 4px 0 0",
+                    minHeight: "4px",
+                    height: `${Math.max((point.count / maxActivity) * 90, 4)}px`,
+                    backgroundColor: "var(--vscode-button-background)",
+                    opacity: point.count === 0 ? 0.3 : 0.95,
+                  }}
+                />
+                <span style={{ fontSize: "9px", opacity: 0.7 }}>{point.label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div
+          style={{
+            flex: "1 1 300px",
+            backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+            padding: "20px",
+            borderRadius: "6px",
+          }}
+        >
+          <h3 style={{ marginTop: 0 }}>Participants</h3>
+          {boardMetrics.participants.length === 0 ? (
+            <div style={{ opacity: 0.7 }}>Sin actividad registrada todavía.</div>
+          ) : (
+            <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {boardMetrics.participants.slice(0, 8).map((person) => (
+                <li
+                  key={person.username}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    borderBottom: "1px solid var(--vscode-widget-border)",
+                    padding: "8px 0",
+                  }}
+                >
+                  <span>👤 {person.username}</span>
+                  <strong>{person.updates} updates</strong>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     );
   };
@@ -671,27 +852,29 @@ export const App: React.FC = () => {
   return (
     <div
       style={{
-        padding: "20px",
+        padding: "18px 20px",
         height: "100vh",
         display: "flex",
         flexDirection: "column",
         boxSizing: "border-box",
+        background:
+          "linear-gradient(180deg, var(--vscode-editor-background) 0%, var(--vscode-sideBar-background) 100%)",
       }}
     >
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
-          marginBottom: "20px",
+          marginBottom: "16px",
           borderBottom: "1px solid var(--vscode-widget-border)",
-          paddingBottom: "10px",
+          paddingBottom: "12px",
           flexShrink: 0,
           flexWrap: "wrap",
-          gap: "10px",
+          gap: "12px",
         }}
       >
         <div style={{ display: "flex", gap: "15px", alignItems: "center" }}>
-          <h1 style={{ margin: 0, color: "var(--vscode-textLink-foreground)" }}>
+          <h1 style={{ margin: 0, color: "var(--vscode-textLink-foreground)", letterSpacing: "0.3px" }}>
             🚀 Lynvo
           </h1>
           <button
@@ -703,9 +886,9 @@ export const App: React.FC = () => {
                   : "transparent",
               color:
                 activeView === "board" ? "white" : "var(--vscode-foreground)",
-              border: "none",
-              padding: "5px 10px",
-              borderRadius: "4px",
+              border: "1px solid var(--vscode-widget-border)",
+              padding: "6px 12px",
+              borderRadius: "999px",
               cursor: "pointer",
             }}
           >
@@ -722,9 +905,9 @@ export const App: React.FC = () => {
                 activeView === "insights"
                   ? "white"
                   : "var(--vscode-foreground)",
-              border: "none",
-              padding: "5px 10px",
-              borderRadius: "4px",
+              border: "1px solid var(--vscode-widget-border)",
+              padding: "6px 12px",
+              borderRadius: "999px",
               cursor: "pointer",
             }}
           >
@@ -739,9 +922,9 @@ export const App: React.FC = () => {
                   : "transparent",
               color:
                 activeView === "labels" ? "white" : "var(--vscode-foreground)",
-              border: "none",
-              padding: "5px 10px",
-              borderRadius: "4px",
+              border: "1px solid var(--vscode-widget-border)",
+              padding: "6px 12px",
+              borderRadius: "999px",
               cursor: "pointer",
             }}
           >
@@ -752,9 +935,9 @@ export const App: React.FC = () => {
             onClick={triggerSync}
             disabled={isSyncing}
             style={{
-              marginLeft: "10px",
-              padding: "5px 10px",
-              borderRadius: "4px",
+              marginLeft: "4px",
+              padding: "6px 12px",
+              borderRadius: "999px",
               cursor: isSyncing ? "wait" : "pointer",
               backgroundColor: "var(--vscode-button-secondaryBackground)",
               color: "var(--vscode-button-secondaryForeground)",
@@ -764,6 +947,20 @@ export const App: React.FC = () => {
           >
             {isSyncing ? "⏳ Syncing..." : "☁️ Sync Team"}
           </button>
+          {boardMetrics && (
+            <span
+              style={{
+                marginLeft: "6px",
+                fontSize: "11px",
+                opacity: 0.8,
+                border: "1px solid var(--vscode-widget-border)",
+                borderRadius: "999px",
+                padding: "5px 10px",
+              }}
+            >
+              {boardMetrics.tasks.length} tasks · {boardMetrics.participants.length} participantes
+            </span>
+          )}
         </div>
 
         {activeView === "board" && (
@@ -827,10 +1024,11 @@ export const App: React.FC = () => {
                   backgroundColor:
                     "var(--vscode-editor-inactiveSelectionBackground)",
                   padding: "15px",
-                  borderRadius: "8px",
+                  borderRadius: "12px",
                   height: "100%",
                   overflowY: "auto",
                   borderTop: `4px solid ${col.color}`,
+                  border: "1px solid var(--vscode-widget-border)",
                   boxSizing: "border-box",
                 }}
               >
