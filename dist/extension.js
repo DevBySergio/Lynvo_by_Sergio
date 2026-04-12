@@ -55,7 +55,7 @@ function activate(context) {
     // 1. REGISTRAMOS EL MENÚ LATERAL
     const lynvoMenuProvider = new LynvoMenuProvider_1.LynvoMenuProvider();
     // Corregido: Ahora coincide exactamente con el ID de tu package.json
-    vscode.window.registerTreeDataProvider("lynvo.sidebarMenu", lynvoMenuProvider);
+    context.subscriptions.push(vscode.window.registerTreeDataProvider("lynvo.sidebarMenu", lynvoMenuProvider));
     // 2. INICIALIZAMOS LA BASE DE DATOS
     DataManager_1.DataManager.initializeBoard().catch((err) => console.error("Lynvo Init Error:", err));
     context.subscriptions.push(vscode.commands.registerCommand("lynvo.testAuth", async () => {
@@ -227,6 +227,12 @@ class DataManager {
             return undefined;
         return vscode.Uri.joinPath(workspaceFolders[0].uri, this.FOLDER, this.FILENAME);
     }
+    static getFolderUri() {
+        const workspaceFolders = vscode.workspace.workspaceFolders;
+        if (!workspaceFolders || workspaceFolders.length === 0)
+            return undefined;
+        return vscode.Uri.joinPath(workspaceFolders[0].uri, this.FOLDER);
+    }
     static async initializeBoard() {
         const fileUri = this.getFileUri();
         if (!fileUri)
@@ -314,8 +320,10 @@ class DataManager {
     }
     static async saveBoard(board) {
         const fileUri = this.getFileUri();
-        if (!fileUri)
+        const folderUri = this.getFolderUri();
+        if (!fileUri || !folderUri)
             return;
+        await vscode.workspace.fs.createDirectory(folderUri);
         const data = Buffer.from(JSON.stringify(board, null, 2), "utf8");
         await vscode.workspace.fs.writeFile(fileUri, data);
     }

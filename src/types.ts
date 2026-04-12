@@ -9,7 +9,7 @@ export interface LynvoUser {
 export interface CodeReference {
   filePath: string;
   lineStart: number;
-  lineEnd: number;
+  lineEnd?: number;
 }
 
 // NUEVO: Definición de una Columna
