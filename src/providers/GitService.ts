@@ -72,15 +72,11 @@ export class GitService {
           }
         }
 
-        // Mezclamos la estructura (columnas y etiquetas)
+        // Estructura del tablero: la versión local es la fuente de verdad
+        // para evitar "resurrección" de columnas/labels eliminadas por el usuario.
         localBoard.tasks = mergedTasks;
-        localBoard.columns = { ...remoteBoard.columns, ...localBoard.columns };
-        if (remoteBoard.labels) {
-          localBoard.labels = {
-            ...remoteBoard.labels,
-            ...(localBoard.labels || {}),
-          };
-        }
+        localBoard.columns = { ...localBoard.columns };
+        localBoard.labels = { ...(localBoard.labels || {}) };
 
         await DataManager.saveBoard(localBoard);
       }

@@ -1,4 +1,3 @@
-// src/providers/LynvoPanel.ts
 import * as vscode from "vscode";
 import { DataManager } from "./DataManager";
 import { GitService } from "./GitService";
@@ -50,9 +49,7 @@ export class LynvoPanel {
     this._panel.dispose();
     while (this._disposables.length) {
       const disposable = this._disposables.pop();
-      if (disposable) {
-        disposable.dispose();
-      }
+      if (disposable) disposable.dispose();
     }
   }
 
@@ -60,15 +57,13 @@ export class LynvoPanel {
     webview.onDidReceiveMessage(
       async (message: any) => {
         switch (message.command) {
-          case "requestData":
+          case "requestData": {
             const board = await DataManager.loadBoard();
             webview.postMessage({ command: "loadData", data: board });
             return;
+          }
           case "updateTaskStatus":
-            await DataManager.updateTaskStatus(
-              message.taskId,
-              message.newStatus,
-            );
+            await DataManager.updateTaskStatus(message.taskId, message.newStatus);
             LynvoPanel.refreshData();
             return;
           case "reorderTasks":
@@ -81,6 +76,9 @@ export class LynvoPanel {
               message.description,
               message.targetColId,
               message.labelIds,
+              undefined,
+              message.priority,
+              message.dueDate,
             );
             LynvoPanel.refreshData();
             return;
@@ -90,10 +88,12 @@ export class LynvoPanel {
               message.title,
               message.description,
               message.labelIds,
+              message.priority,
+              message.dueDate,
             );
             LynvoPanel.refreshData();
             return;
-          case "deleteTask":
+          case "deleteTask": {
             const confirmTask = await vscode.window.showWarningMessage(
               "Delete task?",
               { modal: true },
@@ -104,29 +104,42 @@ export class LynvoPanel {
               LynvoPanel.refreshData();
             }
             return;
+          }
+          case "archiveCompletedTasks": {
+            const archived = await DataManager.archiveCompletedTasks();
+            vscode.window.showInformationMessage(
+              `Lynvo: ${archived} completed task(s) archived.`,
+            );
+            LynvoPanel.refreshData();
+            return;
+          }
+          case "restoreTask":
+            await DataManager.restoreTask(message.taskId);
+            LynvoPanel.refreshData();
+            return;
           case "createColumn":
             await DataManager.createColumn(message.title, message.color);
             LynvoPanel.refreshData();
             return;
           case "editColumn":
-            await DataManager.editColumn(
-              message.colId,
-              message.title,
-              message.color,
-            );
+            await DataManager.editColumn(message.colId, message.title, message.color);
             LynvoPanel.refreshData();
             return;
-          case "deleteColumn":
+          case "deleteColumn": {
             const confirmCol = await vscode.window.showWarningMessage(
-              "Delete column? ALL TASKS inside will be deleted.",
+              "Delete column? Tasks will be moved to the first column.",
               { modal: true },
               "Delete",
             );
             if (confirmCol === "Delete") {
-              await DataManager.deleteColumn(message.colId);
+              const moved = await DataManager.deleteColumn(message.colId);
+              vscode.window.showInformationMessage(
+                `Column removed. ${moved} task(s) were moved safely.`,
+              );
               LynvoPanel.refreshData();
             }
             return;
+          }
           case "reorderColumns":
             await DataManager.reorderColumns(message.updates);
             LynvoPanel.refreshData();
@@ -139,7 +152,7 @@ export class LynvoPanel {
             await DataManager.deleteLabel(message.labelId);
             LynvoPanel.refreshData();
             return;
-          case "syncBoard":
+          case "syncBoard": {
             const result = await GitService.syncBoard();
             if (result.success) {
               vscode.window.showInformationMessage(result.message);
@@ -148,13 +161,11 @@ export class LynvoPanel {
             }
             LynvoPanel.refreshData();
             return;
-          case "openCode":
+          }
+          case "openCode": {
             const folders = vscode.workspace.workspaceFolders;
             if (folders) {
-              const fileUri = vscode.Uri.joinPath(
-                folders[0].uri,
-                message.filePath,
-              );
+              const fileUri = vscode.Uri.joinPath(folders[0].uri, message.filePath);
               const doc = await vscode.workspace.openTextDocument(fileUri);
               const editor = await vscode.window.showTextDocument(
                 doc,
@@ -168,6 +179,7 @@ export class LynvoPanel {
               );
             }
             return;
+          }
         }
       },
       undefined,
@@ -175,32 +187,32 @@ export class LynvoPanel {
     );
   }
 
-  private _getWebviewContent(
-    webview: vscode.Webview,
-    extensionUri: vscode.Uri,
-  ) {
+  private _getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri) {
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(extensionUri, "dist", "webview.js"),
     );
     const nonce = getNonce();
+
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-            body { overflow-x: hidden; font-family: var(--vscode-font-family); margin: 0; color: var(--vscode-foreground); }
-            * { box-sizing: border-box; }
-            button { font-family: inherit; }
-            .icon-btn { cursor: pointer; opacity: 0.7; background: transparent; border: none; color: var(--vscode-foreground); font-size: 14px; transition: all .15s ease; border-radius: 6px; }
-            .icon-btn:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground); }
-            .icon-btn.delete:hover { color: var(--vscode-errorForeground); }
-            input, textarea, select { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 6px; }
-            input[type="color"] { -webkit-appearance: none; border: none; width: 25px; height: 25px; cursor: pointer; padding: 0; background: transparent; }
-            input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-            input[type="color"]::-webkit-color-swatch { border: 1px solid var(--vscode-widget-border); border-radius: 4px; }
-        </style></head><body><div id="root"></div><script nonce="${nonce}" src="${scriptUri}"></script></body></html>`;
+      body { overflow-x: hidden; font-family: var(--vscode-font-family); margin: 0; color: var(--vscode-foreground); }
+      * { box-sizing: border-box; }
+      button { font-family: inherit; }
+      .icon-btn { cursor: pointer; opacity: 0.7; background: transparent; border: none; color: var(--vscode-foreground); font-size: 14px; transition: all .15s ease; border-radius: 6px; }
+      .icon-btn:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground); }
+      .icon-btn.delete:hover { color: var(--vscode-errorForeground); }
+      input, textarea, select { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 6px; }
+      input[type="color"] { -webkit-appearance: none; border: none; width: 25px; height: 25px; cursor: pointer; padding: 0; background: transparent; }
+      input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+      input[type="color"]::-webkit-color-swatch { border: 1px solid var(--vscode-widget-border); border-radius: 4px; }
+    </style></head><body><div id="root"></div><script nonce="${nonce}" src="${scriptUri}"></script></body></html>`;
   }
 }
+
 function getNonce() {
   let t = "";
   const p = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-  for (let i = 0; i < 32; i++)
+  for (let i = 0; i < 32; i++) {
     t += p.charAt(Math.floor(Math.random() * p.length));
+  }
   return t;
 }
