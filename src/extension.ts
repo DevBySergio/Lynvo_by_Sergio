@@ -9,9 +9,11 @@ export function activate(context: vscode.ExtensionContext) {
   // 1. REGISTRAMOS EL MENÚ LATERAL
   const lynvoMenuProvider = new LynvoMenuProvider();
   // Corregido: Ahora coincide exactamente con el ID de tu package.json
-  vscode.window.registerTreeDataProvider(
-    "lynvo.sidebarMenu",
-    lynvoMenuProvider,
+  context.subscriptions.push(
+    vscode.window.registerTreeDataProvider(
+      "lynvo.sidebarMenu",
+      lynvoMenuProvider,
+    ),
   );
 
   // 2. INICIALIZAMOS LA BASE DE DATOS

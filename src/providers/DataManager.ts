@@ -23,6 +23,12 @@ export class DataManager {
     );
   }
 
+  private static getFolderUri(): vscode.Uri | undefined {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (!workspaceFolders || workspaceFolders.length === 0) return undefined;
+    return vscode.Uri.joinPath(workspaceFolders[0].uri, this.FOLDER);
+  }
+
   public static async initializeBoard(): Promise<void> {
     const fileUri = this.getFileUri();
     if (!fileUri) return;
@@ -107,7 +113,9 @@ export class DataManager {
 
   public static async saveBoard(board: LynvoBoard): Promise<void> {
     const fileUri = this.getFileUri();
-    if (!fileUri) return;
+    const folderUri = this.getFolderUri();
+    if (!fileUri || !folderUri) return;
+    await vscode.workspace.fs.createDirectory(folderUri);
     const data = Buffer.from(JSON.stringify(board, null, 2), "utf8");
     await vscode.workspace.fs.writeFile(fileUri, data);
   }
@@ -147,7 +155,7 @@ export class DataManager {
     description: string,
     targetColId?: string,
     labelIds: string[] = [],
-    codeReference?: any,
+    codeReference?: CodeReference,
   ): Promise<void> {
     const board = await this.loadBoard();
     if (!board) return;
