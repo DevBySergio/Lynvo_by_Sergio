@@ -12,14 +12,34 @@ export class LynvoMenuProvider implements vscode.TreeDataProvider<vscode.TreeIte
     } else {
       return Promise.resolve([
         this.createMenuItem(
-          "🚀 Open Board",
+          "Open Board",
           "lynvo.openBoard",
-          "Abre el tablero principal de Kanban",
+          "Abre el tablero principal",
+          "project",
         ),
         this.createMenuItem(
-          "➕ Add Task from Code",
+          "Add Task from Code",
           "lynvo.createTaskFromCode",
-          "Crea una tarea a partir de tu selección actual",
+          "Crea una tarea desde tu selección actual",
+          "add",
+        ),
+        this.createMenuItem(
+          "Connect GitHub",
+          "lynvo.connectGitHub",
+          "Inicia sesión o vincula tu cuenta de GitHub",
+          "vm-connect",
+        ),
+        this.createMenuItem(
+          "Check GitHub Status",
+          "lynvo.checkGitHubStatus",
+          "Comprueba si hay sesión de GitHub activa",
+          "account",
+        ),
+        this.createMenuItem(
+          "Sync Board",
+          "lynvo.syncBoard",
+          "Sincroniza el tablero con el repositorio remoto",
+          "cloud-upload",
         ),
       ]);
     }
@@ -29,6 +49,7 @@ export class LynvoMenuProvider implements vscode.TreeDataProvider<vscode.TreeIte
     label: string,
     command: string,
     tooltip: string,
+    iconId?: string,
   ): vscode.TreeItem {
     const item = new vscode.TreeItem(
       label,
@@ -36,6 +57,10 @@ export class LynvoMenuProvider implements vscode.TreeDataProvider<vscode.TreeIte
     );
     item.command = { command: command, title: label };
     item.tooltip = tooltip;
+    item.description = tooltip;
+    if (iconId) {
+      item.iconPath = new vscode.ThemeIcon(iconId);
+    }
     return item;
   }
 }

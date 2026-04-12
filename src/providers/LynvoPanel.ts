@@ -184,11 +184,13 @@ export class LynvoPanel {
     );
     const nonce = getNonce();
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
-            body { overflow-x: hidden; font-family: var(--vscode-font-family); }
-            .icon-btn { cursor: pointer; opacity: 0.6; background: transparent; border: none; color: var(--vscode-foreground); font-size: 14px; }
-            .icon-btn:hover { opacity: 1; }
+            body { overflow-x: hidden; font-family: var(--vscode-font-family); margin: 0; color: var(--vscode-foreground); }
+            * { box-sizing: border-box; }
+            button { font-family: inherit; }
+            .icon-btn { cursor: pointer; opacity: 0.7; background: transparent; border: none; color: var(--vscode-foreground); font-size: 14px; transition: all .15s ease; border-radius: 6px; }
+            .icon-btn:hover { opacity: 1; background: var(--vscode-toolbar-hoverBackground); }
             .icon-btn.delete:hover { color: var(--vscode-errorForeground); }
-            input, textarea, select { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 2px; }
+            input, textarea, select { background: var(--vscode-input-background); color: var(--vscode-input-foreground); border: 1px solid var(--vscode-input-border); border-radius: 6px; }
             input[type="color"] { -webkit-appearance: none; border: none; width: 25px; height: 25px; cursor: pointer; padding: 0; background: transparent; }
             input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
             input[type="color"]::-webkit-color-swatch { border: 1px solid var(--vscode-widget-border); border-radius: 4px; }
