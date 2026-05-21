@@ -1,72 +1,98 @@
-# lynvo README
+# Lynvo - Project Board
 
-This is the README for your extension "lynvo". After writing up a brief description, we recommend including the following sections.
+Lynvo turns VS Code into a local-first project board for engineering teams. It combines a Kanban workflow, code-linked tasks, GitHub-backed collaboration, and project views directly inside the editor.
 
-## Features
+![Lynvo board preview](media/lynvo-board-preview.png)
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
+## Key Features
 
-For example if there is an image subfolder under your extension project workspace:
+- **Kanban board:** Dynamic columns, drag and drop, priorities, due dates, labels, filters, and search.
+- **Table view:** Jira-style task overview for scanning status, priority, labels, due dates, and linked code.
+- **Code-linked tasks:** Create tasks from selected code and jump back to the exact file and lines from the board.
+- **Checklists and task relations:** Break down work into checklist items and connect tasks as related, blocking, blocked by, or duplicates.
+- **Activity feed:** Track board changes, task edits, checklist updates, relation changes, and deletes.
+- **Markdown descriptions:** Supports lists, checklists, links, quotes, inline code, and fenced code blocks.
+- **Conflict center:** Review basic sync conflicts and choose the local or remote value.
+- **Local-first persistence:** Project data lives in `.vscode/lynvo/` using modular JSON files by entity.
+- **Shadow Branch Sync:** Automatic GitHub sync writes technical commits only to the internal `lynvo-sync` branch, keeping `main`, `develop`, and feature branches clean.
+- **Presence indicators:** Shows recently active collaborators based on local sync metadata.
 
-\!\[feature X\]\(images/feature-x.png\)
+## Data Model
 
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+Lynvo stores board data in a modular project folder:
+
+```text
+.vscode/lynvo/
+  board.json
+  columns.json
+  users.json
+  settings.json
+  tasks/
+    task-id.json
+  activity/
+    activity-id.json
+  metadata/
+    sync.json
+    tombstones.json
+    conflicts.json
+    version.json
+```
+
+Existing projects using `.vscode/lynvo.json` are migrated automatically the first time Lynvo loads the board.
+
+## Team Sync
+
+Lynvo syncs through Git and the repository remote named `origin`.
+
+- Automatic commits are isolated in the internal `lynvo-sync` branch.
+- The active user branch is not checked out, amended, or polluted with technical commits.
+- Local board changes are debounced before sync to reduce unnecessary Git operations.
+- Offline or failed pushes keep changes locally and retry on the next sync.
+- Deletes are tracked with tombstones to reduce task resurrection during merges.
+- Basic field conflicts are surfaced in the Conflict Center.
+
+## Getting Started
+
+1. Open a workspace that is already a Git repository.
+2. Configure a remote named `origin` if you want team sync.
+3. Run `Lynvo: Open Project Board` from the command palette or open Lynvo from the Activity Bar.
+4. Create columns, labels, and tasks from the board or from selected code.
+5. Use `Lynvo: Sync Team Board` to trigger sync manually; Lynvo also performs background sync.
+
+## Commands
+
+| Command | Description |
+| :-- | :-- |
+| `Lynvo: Open Project Board` | Opens the Kanban board. |
+| `Lynvo: Open Table View` | Opens the table view. |
+| `Lynvo: Open Activity Feed` | Opens the activity feed. |
+| `Lynvo: Open Conflict Center` | Opens sync conflict resolution. |
+| `Lynvo: Open Labels Manager` | Opens label management. |
+| `Lynvo: Open Insights View` | Opens project analytics. |
+| `Lynvo: Quick Create Task` | Creates a task from VS Code without opening the board first. |
+| `Lynvo: Create Task from Selection` | Creates a task linked to selected code. |
+| `Lynvo: Sync Team Board` | Runs a manual shadow-branch sync. |
+| `Lynvo: Connect GitHub` | Stores the current GitHub identity for task authorship and presence. |
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- Visual Studio Code 1.80.0 or newer.
+- Git installed locally.
+- A repository remote named `origin` for GitHub-backed collaboration.
 
-## Extension Settings
+## Privacy
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
+Lynvo has no external application server. Board data is stored in the current workspace and synchronized through your Git remote when sync is enabled.
 
-For example:
+## Development
 
-This extension contributes the following settings:
+```bash
+npm install
+npm run compile
+npm run package
+npm run compile-tests
+```
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+## License
 
-## Known Issues
-
-Calling out known issues can help limit users opening duplicate issues against your extension.
-
-## Release Notes
-
-Users appreciate release notes as you update your extension.
-
-### 1.0.0
-
-Initial release of ...
-
-### 1.0.1
-
-Fixed issue #.
-
-### 1.1.0
-
-Added features X, Y, and Z.
-
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
-# Lynvo_by_Sergio
+MIT

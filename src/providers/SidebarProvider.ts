@@ -1,36 +1,33 @@
-// src/providers/SidebarProvider.ts
 import * as vscode from "vscode";
 
-// Creamos un proveedor de datos para una vista de árbol (TreeView) nativa de VS Code
 export class SidebarProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
     return element;
   }
 
   getChildren(): vscode.ProviderResult<vscode.TreeItem[]> {
-    // Opción 1: Botón para abrir el tablero
     const openBoardItem = new vscode.TreeItem(
-      "🚀 Abrir Tablero Lynvo",
+      "Open Board",
       vscode.TreeItemCollapsibleState.None,
     );
     openBoardItem.tooltip = "Abre el panel Kanban en pantalla completa";
+    openBoardItem.iconPath = new vscode.ThemeIcon("board");
     openBoardItem.command = {
       command: "lynvo.openBoard",
-      title: "Abrir Tablero",
+      title: "Open Board",
     };
 
-    // Opción 2: Botón para probar la conexión
     const authItem = new vscode.TreeItem(
-      "🔐 Conectar GitHub",
+      "Connect GitHub",
       vscode.TreeItemCollapsibleState.None,
     );
     authItem.tooltip = "Verifica tu identidad en GitHub";
+    authItem.iconPath = new vscode.ThemeIcon("github");
     authItem.command = {
       command: "lynvo.testAuth",
-      title: "Conectar GitHub",
+      title: "Connect GitHub",
     };
 
-    // Devolvemos los botones que aparecerán en la barra lateral
     return [openBoardItem, authItem];
   }
 }

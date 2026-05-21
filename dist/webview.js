@@ -33,8 +33,8 @@ if (
 ) {
   __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
 }
-          var React = __webpack_require__(/*! react */ "./node_modules/react-dom/node_modules/react/index.js");
-var Scheduler = __webpack_require__(/*! scheduler */ "./node_modules/react-dom/node_modules/scheduler/index.js");
+          var React = __webpack_require__(/*! react */ "./node_modules/react/index.js");
+var Scheduler = __webpack_require__(/*! scheduler */ "./node_modules/scheduler/index.js");
 
 var ReactSharedInternals = React.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
 
@@ -30002,3433 +30002,6 @@ if (false) // removed by dead control flow
 
 /***/ },
 
-/***/ "./node_modules/react-dom/node_modules/react/cjs/react.development.js"
-/*!****************************************************************************!*\
-  !*** ./node_modules/react-dom/node_modules/react/cjs/react.development.js ***!
-  \****************************************************************************/
-(module, exports, __webpack_require__) {
-
-/* module decorator */ module = __webpack_require__.nmd(module);
-/**
- * @license React
- * react.development.js
- *
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-
-
-if (true) {
-  (function() {
-
-          'use strict';
-
-/* global __REACT_DEVTOOLS_GLOBAL_HOOK__ */
-if (
-  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== 'undefined' &&
-  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart ===
-    'function'
-) {
-  __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
-}
-          var ReactVersion = '18.3.1';
-
-// ATTENTION
-// When adding new symbols to this file,
-// Please consider also adding to 'react-devtools-shared/src/backend/ReactSymbols'
-// The Symbol used to tag the ReactElement-like types.
-var REACT_ELEMENT_TYPE = Symbol.for('react.element');
-var REACT_PORTAL_TYPE = Symbol.for('react.portal');
-var REACT_FRAGMENT_TYPE = Symbol.for('react.fragment');
-var REACT_STRICT_MODE_TYPE = Symbol.for('react.strict_mode');
-var REACT_PROFILER_TYPE = Symbol.for('react.profiler');
-var REACT_PROVIDER_TYPE = Symbol.for('react.provider');
-var REACT_CONTEXT_TYPE = Symbol.for('react.context');
-var REACT_FORWARD_REF_TYPE = Symbol.for('react.forward_ref');
-var REACT_SUSPENSE_TYPE = Symbol.for('react.suspense');
-var REACT_SUSPENSE_LIST_TYPE = Symbol.for('react.suspense_list');
-var REACT_MEMO_TYPE = Symbol.for('react.memo');
-var REACT_LAZY_TYPE = Symbol.for('react.lazy');
-var REACT_OFFSCREEN_TYPE = Symbol.for('react.offscreen');
-var MAYBE_ITERATOR_SYMBOL = Symbol.iterator;
-var FAUX_ITERATOR_SYMBOL = '@@iterator';
-function getIteratorFn(maybeIterable) {
-  if (maybeIterable === null || typeof maybeIterable !== 'object') {
-    return null;
-  }
-
-  var maybeIterator = MAYBE_ITERATOR_SYMBOL && maybeIterable[MAYBE_ITERATOR_SYMBOL] || maybeIterable[FAUX_ITERATOR_SYMBOL];
-
-  if (typeof maybeIterator === 'function') {
-    return maybeIterator;
-  }
-
-  return null;
-}
-
-/**
- * Keeps track of the current dispatcher.
- */
-var ReactCurrentDispatcher = {
-  /**
-   * @internal
-   * @type {ReactComponent}
-   */
-  current: null
-};
-
-/**
- * Keeps track of the current batch's configuration such as how long an update
- * should suspend for if it needs to.
- */
-var ReactCurrentBatchConfig = {
-  transition: null
-};
-
-var ReactCurrentActQueue = {
-  current: null,
-  // Used to reproduce behavior of `batchedUpdates` in legacy mode.
-  isBatchingLegacy: false,
-  didScheduleLegacyUpdate: false
-};
-
-/**
- * Keeps track of the current owner.
- *
- * The current owner is the component who should own any components that are
- * currently being constructed.
- */
-var ReactCurrentOwner = {
-  /**
-   * @internal
-   * @type {ReactComponent}
-   */
-  current: null
-};
-
-var ReactDebugCurrentFrame = {};
-var currentExtraStackFrame = null;
-function setExtraStackFrame(stack) {
-  {
-    currentExtraStackFrame = stack;
-  }
-}
-
-{
-  ReactDebugCurrentFrame.setExtraStackFrame = function (stack) {
-    {
-      currentExtraStackFrame = stack;
-    }
-  }; // Stack implementation injected by the current renderer.
-
-
-  ReactDebugCurrentFrame.getCurrentStack = null;
-
-  ReactDebugCurrentFrame.getStackAddendum = function () {
-    var stack = ''; // Add an extra top frame while an element is being validated
-
-    if (currentExtraStackFrame) {
-      stack += currentExtraStackFrame;
-    } // Delegate to the injected renderer-specific implementation
-
-
-    var impl = ReactDebugCurrentFrame.getCurrentStack;
-
-    if (impl) {
-      stack += impl() || '';
-    }
-
-    return stack;
-  };
-}
-
-// -----------------------------------------------------------------------------
-
-var enableScopeAPI = false; // Experimental Create Event Handle API.
-var enableCacheElement = false;
-var enableTransitionTracing = false; // No known bugs, but needs performance testing
-
-var enableLegacyHidden = false; // Enables unstable_avoidThisFallback feature in Fiber
-// stuff. Intended to enable React core members to more easily debug scheduling
-// issues in DEV builds.
-
-var enableDebugTracing = false; // Track which Fiber(s) schedule render work.
-
-var ReactSharedInternals = {
-  ReactCurrentDispatcher: ReactCurrentDispatcher,
-  ReactCurrentBatchConfig: ReactCurrentBatchConfig,
-  ReactCurrentOwner: ReactCurrentOwner
-};
-
-{
-  ReactSharedInternals.ReactDebugCurrentFrame = ReactDebugCurrentFrame;
-  ReactSharedInternals.ReactCurrentActQueue = ReactCurrentActQueue;
-}
-
-// by calls to these methods by a Babel plugin.
-//
-// In PROD (or in packages without access to React internals),
-// they are left as they are instead.
-
-function warn(format) {
-  {
-    {
-      for (var _len = arguments.length, args = new Array(_len > 1 ? _len - 1 : 0), _key = 1; _key < _len; _key++) {
-        args[_key - 1] = arguments[_key];
-      }
-
-      printWarning('warn', format, args);
-    }
-  }
-}
-function error(format) {
-  {
-    {
-      for (var _len2 = arguments.length, args = new Array(_len2 > 1 ? _len2 - 1 : 0), _key2 = 1; _key2 < _len2; _key2++) {
-        args[_key2 - 1] = arguments[_key2];
-      }
-
-      printWarning('error', format, args);
-    }
-  }
-}
-
-function printWarning(level, format, args) {
-  // When changing this logic, you might want to also
-  // update consoleWithStackDev.www.js as well.
-  {
-    var ReactDebugCurrentFrame = ReactSharedInternals.ReactDebugCurrentFrame;
-    var stack = ReactDebugCurrentFrame.getStackAddendum();
-
-    if (stack !== '') {
-      format += '%s';
-      args = args.concat([stack]);
-    } // eslint-disable-next-line react-internal/safe-string-coercion
-
-
-    var argsWithFormat = args.map(function (item) {
-      return String(item);
-    }); // Careful: RN currently depends on this prefix
-
-    argsWithFormat.unshift('Warning: ' + format); // We intentionally don't use spread (or .apply) directly because it
-    // breaks IE9: https://github.com/facebook/react/issues/13610
-    // eslint-disable-next-line react-internal/no-production-logging
-
-    Function.prototype.apply.call(console[level], console, argsWithFormat);
-  }
-}
-
-var didWarnStateUpdateForUnmountedComponent = {};
-
-function warnNoop(publicInstance, callerName) {
-  {
-    var _constructor = publicInstance.constructor;
-    var componentName = _constructor && (_constructor.displayName || _constructor.name) || 'ReactClass';
-    var warningKey = componentName + "." + callerName;
-
-    if (didWarnStateUpdateForUnmountedComponent[warningKey]) {
-      return;
-    }
-
-    error("Can't call %s on a component that is not yet mounted. " + 'This is a no-op, but it might indicate a bug in your application. ' + 'Instead, assign to `this.state` directly or define a `state = {};` ' + 'class property with the desired state in the %s component.', callerName, componentName);
-
-    didWarnStateUpdateForUnmountedComponent[warningKey] = true;
-  }
-}
-/**
- * This is the abstract API for an update queue.
- */
-
-
-var ReactNoopUpdateQueue = {
-  /**
-   * Checks whether or not this composite component is mounted.
-   * @param {ReactClass} publicInstance The instance we want to test.
-   * @return {boolean} True if mounted, false otherwise.
-   * @protected
-   * @final
-   */
-  isMounted: function (publicInstance) {
-    return false;
-  },
-
-  /**
-   * Forces an update. This should only be invoked when it is known with
-   * certainty that we are **not** in a DOM transaction.
-   *
-   * You may want to call this when you know that some deeper aspect of the
-   * component's state has changed but `setState` was not called.
-   *
-   * This will not invoke `shouldComponentUpdate`, but it will invoke
-   * `componentWillUpdate` and `componentDidUpdate`.
-   *
-   * @param {ReactClass} publicInstance The instance that should rerender.
-   * @param {?function} callback Called after component is updated.
-   * @param {?string} callerName name of the calling function in the public API.
-   * @internal
-   */
-  enqueueForceUpdate: function (publicInstance, callback, callerName) {
-    warnNoop(publicInstance, 'forceUpdate');
-  },
-
-  /**
-   * Replaces all of the state. Always use this or `setState` to mutate state.
-   * You should treat `this.state` as immutable.
-   *
-   * There is no guarantee that `this.state` will be immediately updated, so
-   * accessing `this.state` after calling this method may return the old value.
-   *
-   * @param {ReactClass} publicInstance The instance that should rerender.
-   * @param {object} completeState Next state.
-   * @param {?function} callback Called after component is updated.
-   * @param {?string} callerName name of the calling function in the public API.
-   * @internal
-   */
-  enqueueReplaceState: function (publicInstance, completeState, callback, callerName) {
-    warnNoop(publicInstance, 'replaceState');
-  },
-
-  /**
-   * Sets a subset of the state. This only exists because _pendingState is
-   * internal. This provides a merging strategy that is not available to deep
-   * properties which is confusing. TODO: Expose pendingState or don't use it
-   * during the merge.
-   *
-   * @param {ReactClass} publicInstance The instance that should rerender.
-   * @param {object} partialState Next partial state to be merged with state.
-   * @param {?function} callback Called after component is updated.
-   * @param {?string} Name of the calling function in the public API.
-   * @internal
-   */
-  enqueueSetState: function (publicInstance, partialState, callback, callerName) {
-    warnNoop(publicInstance, 'setState');
-  }
-};
-
-var assign = Object.assign;
-
-var emptyObject = {};
-
-{
-  Object.freeze(emptyObject);
-}
-/**
- * Base class helpers for the updating state of a component.
- */
-
-
-function Component(props, context, updater) {
-  this.props = props;
-  this.context = context; // If a component has string refs, we will assign a different object later.
-
-  this.refs = emptyObject; // We initialize the default updater but the real one gets injected by the
-  // renderer.
-
-  this.updater = updater || ReactNoopUpdateQueue;
-}
-
-Component.prototype.isReactComponent = {};
-/**
- * Sets a subset of the state. Always use this to mutate
- * state. You should treat `this.state` as immutable.
- *
- * There is no guarantee that `this.state` will be immediately updated, so
- * accessing `this.state` after calling this method may return the old value.
- *
- * There is no guarantee that calls to `setState` will run synchronously,
- * as they may eventually be batched together.  You can provide an optional
- * callback that will be executed when the call to setState is actually
- * completed.
- *
- * When a function is provided to setState, it will be called at some point in
- * the future (not synchronously). It will be called with the up to date
- * component arguments (state, props, context). These values can be different
- * from this.* because your function may be called after receiveProps but before
- * shouldComponentUpdate, and this new state, props, and context will not yet be
- * assigned to this.
- *
- * @param {object|function} partialState Next partial state or function to
- *        produce next partial state to be merged with current state.
- * @param {?function} callback Called after state is updated.
- * @final
- * @protected
- */
-
-Component.prototype.setState = function (partialState, callback) {
-  if (typeof partialState !== 'object' && typeof partialState !== 'function' && partialState != null) {
-    throw new Error('setState(...): takes an object of state variables to update or a ' + 'function which returns an object of state variables.');
-  }
-
-  this.updater.enqueueSetState(this, partialState, callback, 'setState');
-};
-/**
- * Forces an update. This should only be invoked when it is known with
- * certainty that we are **not** in a DOM transaction.
- *
- * You may want to call this when you know that some deeper aspect of the
- * component's state has changed but `setState` was not called.
- *
- * This will not invoke `shouldComponentUpdate`, but it will invoke
- * `componentWillUpdate` and `componentDidUpdate`.
- *
- * @param {?function} callback Called after update is complete.
- * @final
- * @protected
- */
-
-
-Component.prototype.forceUpdate = function (callback) {
-  this.updater.enqueueForceUpdate(this, callback, 'forceUpdate');
-};
-/**
- * Deprecated APIs. These APIs used to exist on classic React classes but since
- * we would like to deprecate them, we're not going to move them over to this
- * modern base class. Instead, we define a getter that warns if it's accessed.
- */
-
-
-{
-  var deprecatedAPIs = {
-    isMounted: ['isMounted', 'Instead, make sure to clean up subscriptions and pending requests in ' + 'componentWillUnmount to prevent memory leaks.'],
-    replaceState: ['replaceState', 'Refactor your code to use setState instead (see ' + 'https://github.com/facebook/react/issues/3236).']
-  };
-
-  var defineDeprecationWarning = function (methodName, info) {
-    Object.defineProperty(Component.prototype, methodName, {
-      get: function () {
-        warn('%s(...) is deprecated in plain JavaScript React classes. %s', info[0], info[1]);
-
-        return undefined;
-      }
-    });
-  };
-
-  for (var fnName in deprecatedAPIs) {
-    if (deprecatedAPIs.hasOwnProperty(fnName)) {
-      defineDeprecationWarning(fnName, deprecatedAPIs[fnName]);
-    }
-  }
-}
-
-function ComponentDummy() {}
-
-ComponentDummy.prototype = Component.prototype;
-/**
- * Convenience component with default shallow equality check for sCU.
- */
-
-function PureComponent(props, context, updater) {
-  this.props = props;
-  this.context = context; // If a component has string refs, we will assign a different object later.
-
-  this.refs = emptyObject;
-  this.updater = updater || ReactNoopUpdateQueue;
-}
-
-var pureComponentPrototype = PureComponent.prototype = new ComponentDummy();
-pureComponentPrototype.constructor = PureComponent; // Avoid an extra prototype jump for these methods.
-
-assign(pureComponentPrototype, Component.prototype);
-pureComponentPrototype.isPureReactComponent = true;
-
-// an immutable object with a single mutable value
-function createRef() {
-  var refObject = {
-    current: null
-  };
-
-  {
-    Object.seal(refObject);
-  }
-
-  return refObject;
-}
-
-var isArrayImpl = Array.isArray; // eslint-disable-next-line no-redeclare
-
-function isArray(a) {
-  return isArrayImpl(a);
-}
-
-/*
- * The `'' + value` pattern (used in in perf-sensitive code) throws for Symbol
- * and Temporal.* types. See https://github.com/facebook/react/pull/22064.
- *
- * The functions in this module will throw an easier-to-understand,
- * easier-to-debug exception with a clear errors message message explaining the
- * problem. (Instead of a confusing exception thrown inside the implementation
- * of the `value` object).
- */
-// $FlowFixMe only called in DEV, so void return is not possible.
-function typeName(value) {
-  {
-    // toStringTag is needed for namespaced types like Temporal.Instant
-    var hasToStringTag = typeof Symbol === 'function' && Symbol.toStringTag;
-    var type = hasToStringTag && value[Symbol.toStringTag] || value.constructor.name || 'Object';
-    return type;
-  }
-} // $FlowFixMe only called in DEV, so void return is not possible.
-
-
-function willCoercionThrow(value) {
-  {
-    try {
-      testStringCoercion(value);
-      return false;
-    } catch (e) {
-      return true;
-    }
-  }
-}
-
-function testStringCoercion(value) {
-  // If you ended up here by following an exception call stack, here's what's
-  // happened: you supplied an object or symbol value to React (as a prop, key,
-  // DOM attribute, CSS property, string ref, etc.) and when React tried to
-  // coerce it to a string using `'' + value`, an exception was thrown.
-  //
-  // The most common types that will cause this exception are `Symbol` instances
-  // and Temporal objects like `Temporal.Instant`. But any object that has a
-  // `valueOf` or `[Symbol.toPrimitive]` method that throws will also cause this
-  // exception. (Library authors do this to prevent users from using built-in
-  // numeric operators like `+` or comparison operators like `>=` because custom
-  // methods are needed to perform accurate arithmetic or comparison.)
-  //
-  // To fix the problem, coerce this object or symbol value to a string before
-  // passing it to React. The most reliable way is usually `String(value)`.
-  //
-  // To find which value is throwing, check the browser or debugger console.
-  // Before this exception was thrown, there should be `console.error` output
-  // that shows the type (Symbol, Temporal.PlainDate, etc.) that caused the
-  // problem and how that type was used: key, atrribute, input value prop, etc.
-  // In most cases, this console output also shows the component and its
-  // ancestor components where the exception happened.
-  //
-  // eslint-disable-next-line react-internal/safe-string-coercion
-  return '' + value;
-}
-function checkKeyStringCoercion(value) {
-  {
-    if (willCoercionThrow(value)) {
-      error('The provided key is an unsupported type %s.' + ' This value must be coerced to a string before before using it here.', typeName(value));
-
-      return testStringCoercion(value); // throw (to help callers find troubleshooting comments)
-    }
-  }
-}
-
-function getWrappedName(outerType, innerType, wrapperName) {
-  var displayName = outerType.displayName;
-
-  if (displayName) {
-    return displayName;
-  }
-
-  var functionName = innerType.displayName || innerType.name || '';
-  return functionName !== '' ? wrapperName + "(" + functionName + ")" : wrapperName;
-} // Keep in sync with react-reconciler/getComponentNameFromFiber
-
-
-function getContextName(type) {
-  return type.displayName || 'Context';
-} // Note that the reconciler package should generally prefer to use getComponentNameFromFiber() instead.
-
-
-function getComponentNameFromType(type) {
-  if (type == null) {
-    // Host root, text node or just invalid type.
-    return null;
-  }
-
-  {
-    if (typeof type.tag === 'number') {
-      error('Received an unexpected object in getComponentNameFromType(). ' + 'This is likely a bug in React. Please file an issue.');
-    }
-  }
-
-  if (typeof type === 'function') {
-    return type.displayName || type.name || null;
-  }
-
-  if (typeof type === 'string') {
-    return type;
-  }
-
-  switch (type) {
-    case REACT_FRAGMENT_TYPE:
-      return 'Fragment';
-
-    case REACT_PORTAL_TYPE:
-      return 'Portal';
-
-    case REACT_PROFILER_TYPE:
-      return 'Profiler';
-
-    case REACT_STRICT_MODE_TYPE:
-      return 'StrictMode';
-
-    case REACT_SUSPENSE_TYPE:
-      return 'Suspense';
-
-    case REACT_SUSPENSE_LIST_TYPE:
-      return 'SuspenseList';
-
-  }
-
-  if (typeof type === 'object') {
-    switch (type.$$typeof) {
-      case REACT_CONTEXT_TYPE:
-        var context = type;
-        return getContextName(context) + '.Consumer';
-
-      case REACT_PROVIDER_TYPE:
-        var provider = type;
-        return getContextName(provider._context) + '.Provider';
-
-      case REACT_FORWARD_REF_TYPE:
-        return getWrappedName(type, type.render, 'ForwardRef');
-
-      case REACT_MEMO_TYPE:
-        var outerName = type.displayName || null;
-
-        if (outerName !== null) {
-          return outerName;
-        }
-
-        return getComponentNameFromType(type.type) || 'Memo';
-
-      case REACT_LAZY_TYPE:
-        {
-          var lazyComponent = type;
-          var payload = lazyComponent._payload;
-          var init = lazyComponent._init;
-
-          try {
-            return getComponentNameFromType(init(payload));
-          } catch (x) {
-            return null;
-          }
-        }
-
-      // eslint-disable-next-line no-fallthrough
-    }
-  }
-
-  return null;
-}
-
-var hasOwnProperty = Object.prototype.hasOwnProperty;
-
-var RESERVED_PROPS = {
-  key: true,
-  ref: true,
-  __self: true,
-  __source: true
-};
-var specialPropKeyWarningShown, specialPropRefWarningShown, didWarnAboutStringRefs;
-
-{
-  didWarnAboutStringRefs = {};
-}
-
-function hasValidRef(config) {
-  {
-    if (hasOwnProperty.call(config, 'ref')) {
-      var getter = Object.getOwnPropertyDescriptor(config, 'ref').get;
-
-      if (getter && getter.isReactWarning) {
-        return false;
-      }
-    }
-  }
-
-  return config.ref !== undefined;
-}
-
-function hasValidKey(config) {
-  {
-    if (hasOwnProperty.call(config, 'key')) {
-      var getter = Object.getOwnPropertyDescriptor(config, 'key').get;
-
-      if (getter && getter.isReactWarning) {
-        return false;
-      }
-    }
-  }
-
-  return config.key !== undefined;
-}
-
-function defineKeyPropWarningGetter(props, displayName) {
-  var warnAboutAccessingKey = function () {
-    {
-      if (!specialPropKeyWarningShown) {
-        specialPropKeyWarningShown = true;
-
-        error('%s: `key` is not a prop. Trying to access it will result ' + 'in `undefined` being returned. If you need to access the same ' + 'value within the child component, you should pass it as a different ' + 'prop. (https://reactjs.org/link/special-props)', displayName);
-      }
-    }
-  };
-
-  warnAboutAccessingKey.isReactWarning = true;
-  Object.defineProperty(props, 'key', {
-    get: warnAboutAccessingKey,
-    configurable: true
-  });
-}
-
-function defineRefPropWarningGetter(props, displayName) {
-  var warnAboutAccessingRef = function () {
-    {
-      if (!specialPropRefWarningShown) {
-        specialPropRefWarningShown = true;
-
-        error('%s: `ref` is not a prop. Trying to access it will result ' + 'in `undefined` being returned. If you need to access the same ' + 'value within the child component, you should pass it as a different ' + 'prop. (https://reactjs.org/link/special-props)', displayName);
-      }
-    }
-  };
-
-  warnAboutAccessingRef.isReactWarning = true;
-  Object.defineProperty(props, 'ref', {
-    get: warnAboutAccessingRef,
-    configurable: true
-  });
-}
-
-function warnIfStringRefCannotBeAutoConverted(config) {
-  {
-    if (typeof config.ref === 'string' && ReactCurrentOwner.current && config.__self && ReactCurrentOwner.current.stateNode !== config.__self) {
-      var componentName = getComponentNameFromType(ReactCurrentOwner.current.type);
-
-      if (!didWarnAboutStringRefs[componentName]) {
-        error('Component "%s" contains the string ref "%s". ' + 'Support for string refs will be removed in a future major release. ' + 'This case cannot be automatically converted to an arrow function. ' + 'We ask you to manually fix this case by using useRef() or createRef() instead. ' + 'Learn more about using refs safely here: ' + 'https://reactjs.org/link/strict-mode-string-ref', componentName, config.ref);
-
-        didWarnAboutStringRefs[componentName] = true;
-      }
-    }
-  }
-}
-/**
- * Factory method to create a new React element. This no longer adheres to
- * the class pattern, so do not use new to call it. Also, instanceof check
- * will not work. Instead test $$typeof field against Symbol.for('react.element') to check
- * if something is a React Element.
- *
- * @param {*} type
- * @param {*} props
- * @param {*} key
- * @param {string|object} ref
- * @param {*} owner
- * @param {*} self A *temporary* helper to detect places where `this` is
- * different from the `owner` when React.createElement is called, so that we
- * can warn. We want to get rid of owner and replace string `ref`s with arrow
- * functions, and as long as `this` and owner are the same, there will be no
- * change in behavior.
- * @param {*} source An annotation object (added by a transpiler or otherwise)
- * indicating filename, line number, and/or other information.
- * @internal
- */
-
-
-var ReactElement = function (type, key, ref, self, source, owner, props) {
-  var element = {
-    // This tag allows us to uniquely identify this as a React Element
-    $$typeof: REACT_ELEMENT_TYPE,
-    // Built-in properties that belong on the element
-    type: type,
-    key: key,
-    ref: ref,
-    props: props,
-    // Record the component responsible for creating this element.
-    _owner: owner
-  };
-
-  {
-    // The validation flag is currently mutative. We put it on
-    // an external backing store so that we can freeze the whole object.
-    // This can be replaced with a WeakMap once they are implemented in
-    // commonly used development environments.
-    element._store = {}; // To make comparing ReactElements easier for testing purposes, we make
-    // the validation flag non-enumerable (where possible, which should
-    // include every environment we run tests in), so the test framework
-    // ignores it.
-
-    Object.defineProperty(element._store, 'validated', {
-      configurable: false,
-      enumerable: false,
-      writable: true,
-      value: false
-    }); // self and source are DEV only properties.
-
-    Object.defineProperty(element, '_self', {
-      configurable: false,
-      enumerable: false,
-      writable: false,
-      value: self
-    }); // Two elements created in two different places should be considered
-    // equal for testing purposes and therefore we hide it from enumeration.
-
-    Object.defineProperty(element, '_source', {
-      configurable: false,
-      enumerable: false,
-      writable: false,
-      value: source
-    });
-
-    if (Object.freeze) {
-      Object.freeze(element.props);
-      Object.freeze(element);
-    }
-  }
-
-  return element;
-};
-/**
- * Create and return a new ReactElement of the given type.
- * See https://reactjs.org/docs/react-api.html#createelement
- */
-
-function createElement(type, config, children) {
-  var propName; // Reserved names are extracted
-
-  var props = {};
-  var key = null;
-  var ref = null;
-  var self = null;
-  var source = null;
-
-  if (config != null) {
-    if (hasValidRef(config)) {
-      ref = config.ref;
-
-      {
-        warnIfStringRefCannotBeAutoConverted(config);
-      }
-    }
-
-    if (hasValidKey(config)) {
-      {
-        checkKeyStringCoercion(config.key);
-      }
-
-      key = '' + config.key;
-    }
-
-    self = config.__self === undefined ? null : config.__self;
-    source = config.__source === undefined ? null : config.__source; // Remaining properties are added to a new props object
-
-    for (propName in config) {
-      if (hasOwnProperty.call(config, propName) && !RESERVED_PROPS.hasOwnProperty(propName)) {
-        props[propName] = config[propName];
-      }
-    }
-  } // Children can be more than one argument, and those are transferred onto
-  // the newly allocated props object.
-
-
-  var childrenLength = arguments.length - 2;
-
-  if (childrenLength === 1) {
-    props.children = children;
-  } else if (childrenLength > 1) {
-    var childArray = Array(childrenLength);
-
-    for (var i = 0; i < childrenLength; i++) {
-      childArray[i] = arguments[i + 2];
-    }
-
-    {
-      if (Object.freeze) {
-        Object.freeze(childArray);
-      }
-    }
-
-    props.children = childArray;
-  } // Resolve default props
-
-
-  if (type && type.defaultProps) {
-    var defaultProps = type.defaultProps;
-
-    for (propName in defaultProps) {
-      if (props[propName] === undefined) {
-        props[propName] = defaultProps[propName];
-      }
-    }
-  }
-
-  {
-    if (key || ref) {
-      var displayName = typeof type === 'function' ? type.displayName || type.name || 'Unknown' : type;
-
-      if (key) {
-        defineKeyPropWarningGetter(props, displayName);
-      }
-
-      if (ref) {
-        defineRefPropWarningGetter(props, displayName);
-      }
-    }
-  }
-
-  return ReactElement(type, key, ref, self, source, ReactCurrentOwner.current, props);
-}
-function cloneAndReplaceKey(oldElement, newKey) {
-  var newElement = ReactElement(oldElement.type, newKey, oldElement.ref, oldElement._self, oldElement._source, oldElement._owner, oldElement.props);
-  return newElement;
-}
-/**
- * Clone and return a new ReactElement using element as the starting point.
- * See https://reactjs.org/docs/react-api.html#cloneelement
- */
-
-function cloneElement(element, config, children) {
-  if (element === null || element === undefined) {
-    throw new Error("React.cloneElement(...): The argument must be a React element, but you passed " + element + ".");
-  }
-
-  var propName; // Original props are copied
-
-  var props = assign({}, element.props); // Reserved names are extracted
-
-  var key = element.key;
-  var ref = element.ref; // Self is preserved since the owner is preserved.
-
-  var self = element._self; // Source is preserved since cloneElement is unlikely to be targeted by a
-  // transpiler, and the original source is probably a better indicator of the
-  // true owner.
-
-  var source = element._source; // Owner will be preserved, unless ref is overridden
-
-  var owner = element._owner;
-
-  if (config != null) {
-    if (hasValidRef(config)) {
-      // Silently steal the ref from the parent.
-      ref = config.ref;
-      owner = ReactCurrentOwner.current;
-    }
-
-    if (hasValidKey(config)) {
-      {
-        checkKeyStringCoercion(config.key);
-      }
-
-      key = '' + config.key;
-    } // Remaining properties override existing props
-
-
-    var defaultProps;
-
-    if (element.type && element.type.defaultProps) {
-      defaultProps = element.type.defaultProps;
-    }
-
-    for (propName in config) {
-      if (hasOwnProperty.call(config, propName) && !RESERVED_PROPS.hasOwnProperty(propName)) {
-        if (config[propName] === undefined && defaultProps !== undefined) {
-          // Resolve default props
-          props[propName] = defaultProps[propName];
-        } else {
-          props[propName] = config[propName];
-        }
-      }
-    }
-  } // Children can be more than one argument, and those are transferred onto
-  // the newly allocated props object.
-
-
-  var childrenLength = arguments.length - 2;
-
-  if (childrenLength === 1) {
-    props.children = children;
-  } else if (childrenLength > 1) {
-    var childArray = Array(childrenLength);
-
-    for (var i = 0; i < childrenLength; i++) {
-      childArray[i] = arguments[i + 2];
-    }
-
-    props.children = childArray;
-  }
-
-  return ReactElement(element.type, key, ref, self, source, owner, props);
-}
-/**
- * Verifies the object is a ReactElement.
- * See https://reactjs.org/docs/react-api.html#isvalidelement
- * @param {?object} object
- * @return {boolean} True if `object` is a ReactElement.
- * @final
- */
-
-function isValidElement(object) {
-  return typeof object === 'object' && object !== null && object.$$typeof === REACT_ELEMENT_TYPE;
-}
-
-var SEPARATOR = '.';
-var SUBSEPARATOR = ':';
-/**
- * Escape and wrap key so it is safe to use as a reactid
- *
- * @param {string} key to be escaped.
- * @return {string} the escaped key.
- */
-
-function escape(key) {
-  var escapeRegex = /[=:]/g;
-  var escaperLookup = {
-    '=': '=0',
-    ':': '=2'
-  };
-  var escapedString = key.replace(escapeRegex, function (match) {
-    return escaperLookup[match];
-  });
-  return '$' + escapedString;
-}
-/**
- * TODO: Test that a single child and an array with one item have the same key
- * pattern.
- */
-
-
-var didWarnAboutMaps = false;
-var userProvidedKeyEscapeRegex = /\/+/g;
-
-function escapeUserProvidedKey(text) {
-  return text.replace(userProvidedKeyEscapeRegex, '$&/');
-}
-/**
- * Generate a key string that identifies a element within a set.
- *
- * @param {*} element A element that could contain a manual key.
- * @param {number} index Index that is used if a manual key is not provided.
- * @return {string}
- */
-
-
-function getElementKey(element, index) {
-  // Do some typechecking here since we call this blindly. We want to ensure
-  // that we don't block potential future ES APIs.
-  if (typeof element === 'object' && element !== null && element.key != null) {
-    // Explicit key
-    {
-      checkKeyStringCoercion(element.key);
-    }
-
-    return escape('' + element.key);
-  } // Implicit key determined by the index in the set
-
-
-  return index.toString(36);
-}
-
-function mapIntoArray(children, array, escapedPrefix, nameSoFar, callback) {
-  var type = typeof children;
-
-  if (type === 'undefined' || type === 'boolean') {
-    // All of the above are perceived as null.
-    children = null;
-  }
-
-  var invokeCallback = false;
-
-  if (children === null) {
-    invokeCallback = true;
-  } else {
-    switch (type) {
-      case 'string':
-      case 'number':
-        invokeCallback = true;
-        break;
-
-      case 'object':
-        switch (children.$$typeof) {
-          case REACT_ELEMENT_TYPE:
-          case REACT_PORTAL_TYPE:
-            invokeCallback = true;
-        }
-
-    }
-  }
-
-  if (invokeCallback) {
-    var _child = children;
-    var mappedChild = callback(_child); // If it's the only child, treat the name as if it was wrapped in an array
-    // so that it's consistent if the number of children grows:
-
-    var childKey = nameSoFar === '' ? SEPARATOR + getElementKey(_child, 0) : nameSoFar;
-
-    if (isArray(mappedChild)) {
-      var escapedChildKey = '';
-
-      if (childKey != null) {
-        escapedChildKey = escapeUserProvidedKey(childKey) + '/';
-      }
-
-      mapIntoArray(mappedChild, array, escapedChildKey, '', function (c) {
-        return c;
-      });
-    } else if (mappedChild != null) {
-      if (isValidElement(mappedChild)) {
-        {
-          // The `if` statement here prevents auto-disabling of the safe
-          // coercion ESLint rule, so we must manually disable it below.
-          // $FlowFixMe Flow incorrectly thinks React.Portal doesn't have a key
-          if (mappedChild.key && (!_child || _child.key !== mappedChild.key)) {
-            checkKeyStringCoercion(mappedChild.key);
-          }
-        }
-
-        mappedChild = cloneAndReplaceKey(mappedChild, // Keep both the (mapped) and old keys if they differ, just as
-        // traverseAllChildren used to do for objects as children
-        escapedPrefix + ( // $FlowFixMe Flow incorrectly thinks React.Portal doesn't have a key
-        mappedChild.key && (!_child || _child.key !== mappedChild.key) ? // $FlowFixMe Flow incorrectly thinks existing element's key can be a number
-        // eslint-disable-next-line react-internal/safe-string-coercion
-        escapeUserProvidedKey('' + mappedChild.key) + '/' : '') + childKey);
-      }
-
-      array.push(mappedChild);
-    }
-
-    return 1;
-  }
-
-  var child;
-  var nextName;
-  var subtreeCount = 0; // Count of children found in the current subtree.
-
-  var nextNamePrefix = nameSoFar === '' ? SEPARATOR : nameSoFar + SUBSEPARATOR;
-
-  if (isArray(children)) {
-    for (var i = 0; i < children.length; i++) {
-      child = children[i];
-      nextName = nextNamePrefix + getElementKey(child, i);
-      subtreeCount += mapIntoArray(child, array, escapedPrefix, nextName, callback);
-    }
-  } else {
-    var iteratorFn = getIteratorFn(children);
-
-    if (typeof iteratorFn === 'function') {
-      var iterableChildren = children;
-
-      {
-        // Warn about using Maps as children
-        if (iteratorFn === iterableChildren.entries) {
-          if (!didWarnAboutMaps) {
-            warn('Using Maps as children is not supported. ' + 'Use an array of keyed ReactElements instead.');
-          }
-
-          didWarnAboutMaps = true;
-        }
-      }
-
-      var iterator = iteratorFn.call(iterableChildren);
-      var step;
-      var ii = 0;
-
-      while (!(step = iterator.next()).done) {
-        child = step.value;
-        nextName = nextNamePrefix + getElementKey(child, ii++);
-        subtreeCount += mapIntoArray(child, array, escapedPrefix, nextName, callback);
-      }
-    } else if (type === 'object') {
-      // eslint-disable-next-line react-internal/safe-string-coercion
-      var childrenString = String(children);
-      throw new Error("Objects are not valid as a React child (found: " + (childrenString === '[object Object]' ? 'object with keys {' + Object.keys(children).join(', ') + '}' : childrenString) + "). " + 'If you meant to render a collection of children, use an array ' + 'instead.');
-    }
-  }
-
-  return subtreeCount;
-}
-
-/**
- * Maps children that are typically specified as `props.children`.
- *
- * See https://reactjs.org/docs/react-api.html#reactchildrenmap
- *
- * The provided mapFunction(child, index) will be called for each
- * leaf child.
- *
- * @param {?*} children Children tree container.
- * @param {function(*, int)} func The map function.
- * @param {*} context Context for mapFunction.
- * @return {object} Object containing the ordered map of results.
- */
-function mapChildren(children, func, context) {
-  if (children == null) {
-    return children;
-  }
-
-  var result = [];
-  var count = 0;
-  mapIntoArray(children, result, '', '', function (child) {
-    return func.call(context, child, count++);
-  });
-  return result;
-}
-/**
- * Count the number of children that are typically specified as
- * `props.children`.
- *
- * See https://reactjs.org/docs/react-api.html#reactchildrencount
- *
- * @param {?*} children Children tree container.
- * @return {number} The number of children.
- */
-
-
-function countChildren(children) {
-  var n = 0;
-  mapChildren(children, function () {
-    n++; // Don't return anything
-  });
-  return n;
-}
-
-/**
- * Iterates through children that are typically specified as `props.children`.
- *
- * See https://reactjs.org/docs/react-api.html#reactchildrenforeach
- *
- * The provided forEachFunc(child, index) will be called for each
- * leaf child.
- *
- * @param {?*} children Children tree container.
- * @param {function(*, int)} forEachFunc
- * @param {*} forEachContext Context for forEachContext.
- */
-function forEachChildren(children, forEachFunc, forEachContext) {
-  mapChildren(children, function () {
-    forEachFunc.apply(this, arguments); // Don't return anything.
-  }, forEachContext);
-}
-/**
- * Flatten a children object (typically specified as `props.children`) and
- * return an array with appropriately re-keyed children.
- *
- * See https://reactjs.org/docs/react-api.html#reactchildrentoarray
- */
-
-
-function toArray(children) {
-  return mapChildren(children, function (child) {
-    return child;
-  }) || [];
-}
-/**
- * Returns the first child in a collection of children and verifies that there
- * is only one child in the collection.
- *
- * See https://reactjs.org/docs/react-api.html#reactchildrenonly
- *
- * The current implementation of this function assumes that a single child gets
- * passed without a wrapper, but the purpose of this helper function is to
- * abstract away the particular structure of children.
- *
- * @param {?object} children Child collection structure.
- * @return {ReactElement} The first and only `ReactElement` contained in the
- * structure.
- */
-
-
-function onlyChild(children) {
-  if (!isValidElement(children)) {
-    throw new Error('React.Children.only expected to receive a single React element child.');
-  }
-
-  return children;
-}
-
-function createContext(defaultValue) {
-  // TODO: Second argument used to be an optional `calculateChangedBits`
-  // function. Warn to reserve for future use?
-  var context = {
-    $$typeof: REACT_CONTEXT_TYPE,
-    // As a workaround to support multiple concurrent renderers, we categorize
-    // some renderers as primary and others as secondary. We only expect
-    // there to be two concurrent renderers at most: React Native (primary) and
-    // Fabric (secondary); React DOM (primary) and React ART (secondary).
-    // Secondary renderers store their context values on separate fields.
-    _currentValue: defaultValue,
-    _currentValue2: defaultValue,
-    // Used to track how many concurrent renderers this context currently
-    // supports within in a single renderer. Such as parallel server rendering.
-    _threadCount: 0,
-    // These are circular
-    Provider: null,
-    Consumer: null,
-    // Add these to use same hidden class in VM as ServerContext
-    _defaultValue: null,
-    _globalName: null
-  };
-  context.Provider = {
-    $$typeof: REACT_PROVIDER_TYPE,
-    _context: context
-  };
-  var hasWarnedAboutUsingNestedContextConsumers = false;
-  var hasWarnedAboutUsingConsumerProvider = false;
-  var hasWarnedAboutDisplayNameOnConsumer = false;
-
-  {
-    // A separate object, but proxies back to the original context object for
-    // backwards compatibility. It has a different $$typeof, so we can properly
-    // warn for the incorrect usage of Context as a Consumer.
-    var Consumer = {
-      $$typeof: REACT_CONTEXT_TYPE,
-      _context: context
-    }; // $FlowFixMe: Flow complains about not setting a value, which is intentional here
-
-    Object.defineProperties(Consumer, {
-      Provider: {
-        get: function () {
-          if (!hasWarnedAboutUsingConsumerProvider) {
-            hasWarnedAboutUsingConsumerProvider = true;
-
-            error('Rendering <Context.Consumer.Provider> is not supported and will be removed in ' + 'a future major release. Did you mean to render <Context.Provider> instead?');
-          }
-
-          return context.Provider;
-        },
-        set: function (_Provider) {
-          context.Provider = _Provider;
-        }
-      },
-      _currentValue: {
-        get: function () {
-          return context._currentValue;
-        },
-        set: function (_currentValue) {
-          context._currentValue = _currentValue;
-        }
-      },
-      _currentValue2: {
-        get: function () {
-          return context._currentValue2;
-        },
-        set: function (_currentValue2) {
-          context._currentValue2 = _currentValue2;
-        }
-      },
-      _threadCount: {
-        get: function () {
-          return context._threadCount;
-        },
-        set: function (_threadCount) {
-          context._threadCount = _threadCount;
-        }
-      },
-      Consumer: {
-        get: function () {
-          if (!hasWarnedAboutUsingNestedContextConsumers) {
-            hasWarnedAboutUsingNestedContextConsumers = true;
-
-            error('Rendering <Context.Consumer.Consumer> is not supported and will be removed in ' + 'a future major release. Did you mean to render <Context.Consumer> instead?');
-          }
-
-          return context.Consumer;
-        }
-      },
-      displayName: {
-        get: function () {
-          return context.displayName;
-        },
-        set: function (displayName) {
-          if (!hasWarnedAboutDisplayNameOnConsumer) {
-            warn('Setting `displayName` on Context.Consumer has no effect. ' + "You should set it directly on the context with Context.displayName = '%s'.", displayName);
-
-            hasWarnedAboutDisplayNameOnConsumer = true;
-          }
-        }
-      }
-    }); // $FlowFixMe: Flow complains about missing properties because it doesn't understand defineProperty
-
-    context.Consumer = Consumer;
-  }
-
-  {
-    context._currentRenderer = null;
-    context._currentRenderer2 = null;
-  }
-
-  return context;
-}
-
-var Uninitialized = -1;
-var Pending = 0;
-var Resolved = 1;
-var Rejected = 2;
-
-function lazyInitializer(payload) {
-  if (payload._status === Uninitialized) {
-    var ctor = payload._result;
-    var thenable = ctor(); // Transition to the next state.
-    // This might throw either because it's missing or throws. If so, we treat it
-    // as still uninitialized and try again next time. Which is the same as what
-    // happens if the ctor or any wrappers processing the ctor throws. This might
-    // end up fixing it if the resolution was a concurrency bug.
-
-    thenable.then(function (moduleObject) {
-      if (payload._status === Pending || payload._status === Uninitialized) {
-        // Transition to the next state.
-        var resolved = payload;
-        resolved._status = Resolved;
-        resolved._result = moduleObject;
-      }
-    }, function (error) {
-      if (payload._status === Pending || payload._status === Uninitialized) {
-        // Transition to the next state.
-        var rejected = payload;
-        rejected._status = Rejected;
-        rejected._result = error;
-      }
-    });
-
-    if (payload._status === Uninitialized) {
-      // In case, we're still uninitialized, then we're waiting for the thenable
-      // to resolve. Set it as pending in the meantime.
-      var pending = payload;
-      pending._status = Pending;
-      pending._result = thenable;
-    }
-  }
-
-  if (payload._status === Resolved) {
-    var moduleObject = payload._result;
-
-    {
-      if (moduleObject === undefined) {
-        error('lazy: Expected the result of a dynamic imp' + 'ort() call. ' + 'Instead received: %s\n\nYour code should look like: \n  ' + // Break up imports to avoid accidentally parsing them as dependencies.
-        'const MyComponent = lazy(() => imp' + "ort('./MyComponent'))\n\n" + 'Did you accidentally put curly braces around the import?', moduleObject);
-      }
-    }
-
-    {
-      if (!('default' in moduleObject)) {
-        error('lazy: Expected the result of a dynamic imp' + 'ort() call. ' + 'Instead received: %s\n\nYour code should look like: \n  ' + // Break up imports to avoid accidentally parsing them as dependencies.
-        'const MyComponent = lazy(() => imp' + "ort('./MyComponent'))", moduleObject);
-      }
-    }
-
-    return moduleObject.default;
-  } else {
-    throw payload._result;
-  }
-}
-
-function lazy(ctor) {
-  var payload = {
-    // We use these fields to store the result.
-    _status: Uninitialized,
-    _result: ctor
-  };
-  var lazyType = {
-    $$typeof: REACT_LAZY_TYPE,
-    _payload: payload,
-    _init: lazyInitializer
-  };
-
-  {
-    // In production, this would just set it on the object.
-    var defaultProps;
-    var propTypes; // $FlowFixMe
-
-    Object.defineProperties(lazyType, {
-      defaultProps: {
-        configurable: true,
-        get: function () {
-          return defaultProps;
-        },
-        set: function (newDefaultProps) {
-          error('React.lazy(...): It is not supported to assign `defaultProps` to ' + 'a lazy component import. Either specify them where the component ' + 'is defined, or create a wrapping component around it.');
-
-          defaultProps = newDefaultProps; // Match production behavior more closely:
-          // $FlowFixMe
-
-          Object.defineProperty(lazyType, 'defaultProps', {
-            enumerable: true
-          });
-        }
-      },
-      propTypes: {
-        configurable: true,
-        get: function () {
-          return propTypes;
-        },
-        set: function (newPropTypes) {
-          error('React.lazy(...): It is not supported to assign `propTypes` to ' + 'a lazy component import. Either specify them where the component ' + 'is defined, or create a wrapping component around it.');
-
-          propTypes = newPropTypes; // Match production behavior more closely:
-          // $FlowFixMe
-
-          Object.defineProperty(lazyType, 'propTypes', {
-            enumerable: true
-          });
-        }
-      }
-    });
-  }
-
-  return lazyType;
-}
-
-function forwardRef(render) {
-  {
-    if (render != null && render.$$typeof === REACT_MEMO_TYPE) {
-      error('forwardRef requires a render function but received a `memo` ' + 'component. Instead of forwardRef(memo(...)), use ' + 'memo(forwardRef(...)).');
-    } else if (typeof render !== 'function') {
-      error('forwardRef requires a render function but was given %s.', render === null ? 'null' : typeof render);
-    } else {
-      if (render.length !== 0 && render.length !== 2) {
-        error('forwardRef render functions accept exactly two parameters: props and ref. %s', render.length === 1 ? 'Did you forget to use the ref parameter?' : 'Any additional parameter will be undefined.');
-      }
-    }
-
-    if (render != null) {
-      if (render.defaultProps != null || render.propTypes != null) {
-        error('forwardRef render functions do not support propTypes or defaultProps. ' + 'Did you accidentally pass a React component?');
-      }
-    }
-  }
-
-  var elementType = {
-    $$typeof: REACT_FORWARD_REF_TYPE,
-    render: render
-  };
-
-  {
-    var ownName;
-    Object.defineProperty(elementType, 'displayName', {
-      enumerable: false,
-      configurable: true,
-      get: function () {
-        return ownName;
-      },
-      set: function (name) {
-        ownName = name; // The inner component shouldn't inherit this display name in most cases,
-        // because the component may be used elsewhere.
-        // But it's nice for anonymous functions to inherit the name,
-        // so that our component-stack generation logic will display their frames.
-        // An anonymous function generally suggests a pattern like:
-        //   React.forwardRef((props, ref) => {...});
-        // This kind of inner function is not used elsewhere so the side effect is okay.
-
-        if (!render.name && !render.displayName) {
-          render.displayName = name;
-        }
-      }
-    });
-  }
-
-  return elementType;
-}
-
-var REACT_MODULE_REFERENCE;
-
-{
-  REACT_MODULE_REFERENCE = Symbol.for('react.module.reference');
-}
-
-function isValidElementType(type) {
-  if (typeof type === 'string' || typeof type === 'function') {
-    return true;
-  } // Note: typeof might be other than 'symbol' or 'number' (e.g. if it's a polyfill).
-
-
-  if (type === REACT_FRAGMENT_TYPE || type === REACT_PROFILER_TYPE || enableDebugTracing  || type === REACT_STRICT_MODE_TYPE || type === REACT_SUSPENSE_TYPE || type === REACT_SUSPENSE_LIST_TYPE || enableLegacyHidden  || type === REACT_OFFSCREEN_TYPE || enableScopeAPI  || enableCacheElement  || enableTransitionTracing ) {
-    return true;
-  }
-
-  if (typeof type === 'object' && type !== null) {
-    if (type.$$typeof === REACT_LAZY_TYPE || type.$$typeof === REACT_MEMO_TYPE || type.$$typeof === REACT_PROVIDER_TYPE || type.$$typeof === REACT_CONTEXT_TYPE || type.$$typeof === REACT_FORWARD_REF_TYPE || // This needs to include all possible module reference object
-    // types supported by any Flight configuration anywhere since
-    // we don't know which Flight build this will end up being used
-    // with.
-    type.$$typeof === REACT_MODULE_REFERENCE || type.getModuleId !== undefined) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-function memo(type, compare) {
-  {
-    if (!isValidElementType(type)) {
-      error('memo: The first argument must be a component. Instead ' + 'received: %s', type === null ? 'null' : typeof type);
-    }
-  }
-
-  var elementType = {
-    $$typeof: REACT_MEMO_TYPE,
-    type: type,
-    compare: compare === undefined ? null : compare
-  };
-
-  {
-    var ownName;
-    Object.defineProperty(elementType, 'displayName', {
-      enumerable: false,
-      configurable: true,
-      get: function () {
-        return ownName;
-      },
-      set: function (name) {
-        ownName = name; // The inner component shouldn't inherit this display name in most cases,
-        // because the component may be used elsewhere.
-        // But it's nice for anonymous functions to inherit the name,
-        // so that our component-stack generation logic will display their frames.
-        // An anonymous function generally suggests a pattern like:
-        //   React.memo((props) => {...});
-        // This kind of inner function is not used elsewhere so the side effect is okay.
-
-        if (!type.name && !type.displayName) {
-          type.displayName = name;
-        }
-      }
-    });
-  }
-
-  return elementType;
-}
-
-function resolveDispatcher() {
-  var dispatcher = ReactCurrentDispatcher.current;
-
-  {
-    if (dispatcher === null) {
-      error('Invalid hook call. Hooks can only be called inside of the body of a function component. This could happen for' + ' one of the following reasons:\n' + '1. You might have mismatching versions of React and the renderer (such as React DOM)\n' + '2. You might be breaking the Rules of Hooks\n' + '3. You might have more than one copy of React in the same app\n' + 'See https://reactjs.org/link/invalid-hook-call for tips about how to debug and fix this problem.');
-    }
-  } // Will result in a null access error if accessed outside render phase. We
-  // intentionally don't throw our own error because this is in a hot path.
-  // Also helps ensure this is inlined.
-
-
-  return dispatcher;
-}
-function useContext(Context) {
-  var dispatcher = resolveDispatcher();
-
-  {
-    // TODO: add a more generic warning for invalid values.
-    if (Context._context !== undefined) {
-      var realContext = Context._context; // Don't deduplicate because this legitimately causes bugs
-      // and nobody should be using this in existing code.
-
-      if (realContext.Consumer === Context) {
-        error('Calling useContext(Context.Consumer) is not supported, may cause bugs, and will be ' + 'removed in a future major release. Did you mean to call useContext(Context) instead?');
-      } else if (realContext.Provider === Context) {
-        error('Calling useContext(Context.Provider) is not supported. ' + 'Did you mean to call useContext(Context) instead?');
-      }
-    }
-  }
-
-  return dispatcher.useContext(Context);
-}
-function useState(initialState) {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useState(initialState);
-}
-function useReducer(reducer, initialArg, init) {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useReducer(reducer, initialArg, init);
-}
-function useRef(initialValue) {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useRef(initialValue);
-}
-function useEffect(create, deps) {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useEffect(create, deps);
-}
-function useInsertionEffect(create, deps) {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useInsertionEffect(create, deps);
-}
-function useLayoutEffect(create, deps) {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useLayoutEffect(create, deps);
-}
-function useCallback(callback, deps) {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useCallback(callback, deps);
-}
-function useMemo(create, deps) {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useMemo(create, deps);
-}
-function useImperativeHandle(ref, create, deps) {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useImperativeHandle(ref, create, deps);
-}
-function useDebugValue(value, formatterFn) {
-  {
-    var dispatcher = resolveDispatcher();
-    return dispatcher.useDebugValue(value, formatterFn);
-  }
-}
-function useTransition() {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useTransition();
-}
-function useDeferredValue(value) {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useDeferredValue(value);
-}
-function useId() {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useId();
-}
-function useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot) {
-  var dispatcher = resolveDispatcher();
-  return dispatcher.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-}
-
-// Helpers to patch console.logs to avoid logging during side-effect free
-// replaying on render function. This currently only patches the object
-// lazily which won't cover if the log function was extracted eagerly.
-// We could also eagerly patch the method.
-var disabledDepth = 0;
-var prevLog;
-var prevInfo;
-var prevWarn;
-var prevError;
-var prevGroup;
-var prevGroupCollapsed;
-var prevGroupEnd;
-
-function disabledLog() {}
-
-disabledLog.__reactDisabledLog = true;
-function disableLogs() {
-  {
-    if (disabledDepth === 0) {
-      /* eslint-disable react-internal/no-production-logging */
-      prevLog = console.log;
-      prevInfo = console.info;
-      prevWarn = console.warn;
-      prevError = console.error;
-      prevGroup = console.group;
-      prevGroupCollapsed = console.groupCollapsed;
-      prevGroupEnd = console.groupEnd; // https://github.com/facebook/react/issues/19099
-
-      var props = {
-        configurable: true,
-        enumerable: true,
-        value: disabledLog,
-        writable: true
-      }; // $FlowFixMe Flow thinks console is immutable.
-
-      Object.defineProperties(console, {
-        info: props,
-        log: props,
-        warn: props,
-        error: props,
-        group: props,
-        groupCollapsed: props,
-        groupEnd: props
-      });
-      /* eslint-enable react-internal/no-production-logging */
-    }
-
-    disabledDepth++;
-  }
-}
-function reenableLogs() {
-  {
-    disabledDepth--;
-
-    if (disabledDepth === 0) {
-      /* eslint-disable react-internal/no-production-logging */
-      var props = {
-        configurable: true,
-        enumerable: true,
-        writable: true
-      }; // $FlowFixMe Flow thinks console is immutable.
-
-      Object.defineProperties(console, {
-        log: assign({}, props, {
-          value: prevLog
-        }),
-        info: assign({}, props, {
-          value: prevInfo
-        }),
-        warn: assign({}, props, {
-          value: prevWarn
-        }),
-        error: assign({}, props, {
-          value: prevError
-        }),
-        group: assign({}, props, {
-          value: prevGroup
-        }),
-        groupCollapsed: assign({}, props, {
-          value: prevGroupCollapsed
-        }),
-        groupEnd: assign({}, props, {
-          value: prevGroupEnd
-        })
-      });
-      /* eslint-enable react-internal/no-production-logging */
-    }
-
-    if (disabledDepth < 0) {
-      error('disabledDepth fell below zero. ' + 'This is a bug in React. Please file an issue.');
-    }
-  }
-}
-
-var ReactCurrentDispatcher$1 = ReactSharedInternals.ReactCurrentDispatcher;
-var prefix;
-function describeBuiltInComponentFrame(name, source, ownerFn) {
-  {
-    if (prefix === undefined) {
-      // Extract the VM specific prefix used by each line.
-      try {
-        throw Error();
-      } catch (x) {
-        var match = x.stack.trim().match(/\n( *(at )?)/);
-        prefix = match && match[1] || '';
-      }
-    } // We use the prefix to ensure our stacks line up with native stack frames.
-
-
-    return '\n' + prefix + name;
-  }
-}
-var reentry = false;
-var componentFrameCache;
-
-{
-  var PossiblyWeakMap = typeof WeakMap === 'function' ? WeakMap : Map;
-  componentFrameCache = new PossiblyWeakMap();
-}
-
-function describeNativeComponentFrame(fn, construct) {
-  // If something asked for a stack inside a fake render, it should get ignored.
-  if ( !fn || reentry) {
-    return '';
-  }
-
-  {
-    var frame = componentFrameCache.get(fn);
-
-    if (frame !== undefined) {
-      return frame;
-    }
-  }
-
-  var control;
-  reentry = true;
-  var previousPrepareStackTrace = Error.prepareStackTrace; // $FlowFixMe It does accept undefined.
-
-  Error.prepareStackTrace = undefined;
-  var previousDispatcher;
-
-  {
-    previousDispatcher = ReactCurrentDispatcher$1.current; // Set the dispatcher in DEV because this might be call in the render function
-    // for warnings.
-
-    ReactCurrentDispatcher$1.current = null;
-    disableLogs();
-  }
-
-  try {
-    // This should throw.
-    if (construct) {
-      // Something should be setting the props in the constructor.
-      var Fake = function () {
-        throw Error();
-      }; // $FlowFixMe
-
-
-      Object.defineProperty(Fake.prototype, 'props', {
-        set: function () {
-          // We use a throwing setter instead of frozen or non-writable props
-          // because that won't throw in a non-strict mode function.
-          throw Error();
-        }
-      });
-
-      if (typeof Reflect === 'object' && Reflect.construct) {
-        // We construct a different control for this case to include any extra
-        // frames added by the construct call.
-        try {
-          Reflect.construct(Fake, []);
-        } catch (x) {
-          control = x;
-        }
-
-        Reflect.construct(fn, [], Fake);
-      } else {
-        try {
-          Fake.call();
-        } catch (x) {
-          control = x;
-        }
-
-        fn.call(Fake.prototype);
-      }
-    } else {
-      try {
-        throw Error();
-      } catch (x) {
-        control = x;
-      }
-
-      fn();
-    }
-  } catch (sample) {
-    // This is inlined manually because closure doesn't do it for us.
-    if (sample && control && typeof sample.stack === 'string') {
-      // This extracts the first frame from the sample that isn't also in the control.
-      // Skipping one frame that we assume is the frame that calls the two.
-      var sampleLines = sample.stack.split('\n');
-      var controlLines = control.stack.split('\n');
-      var s = sampleLines.length - 1;
-      var c = controlLines.length - 1;
-
-      while (s >= 1 && c >= 0 && sampleLines[s] !== controlLines[c]) {
-        // We expect at least one stack frame to be shared.
-        // Typically this will be the root most one. However, stack frames may be
-        // cut off due to maximum stack limits. In this case, one maybe cut off
-        // earlier than the other. We assume that the sample is longer or the same
-        // and there for cut off earlier. So we should find the root most frame in
-        // the sample somewhere in the control.
-        c--;
-      }
-
-      for (; s >= 1 && c >= 0; s--, c--) {
-        // Next we find the first one that isn't the same which should be the
-        // frame that called our sample function and the control.
-        if (sampleLines[s] !== controlLines[c]) {
-          // In V8, the first line is describing the message but other VMs don't.
-          // If we're about to return the first line, and the control is also on the same
-          // line, that's a pretty good indicator that our sample threw at same line as
-          // the control. I.e. before we entered the sample frame. So we ignore this result.
-          // This can happen if you passed a class to function component, or non-function.
-          if (s !== 1 || c !== 1) {
-            do {
-              s--;
-              c--; // We may still have similar intermediate frames from the construct call.
-              // The next one that isn't the same should be our match though.
-
-              if (c < 0 || sampleLines[s] !== controlLines[c]) {
-                // V8 adds a "new" prefix for native classes. Let's remove it to make it prettier.
-                var _frame = '\n' + sampleLines[s].replace(' at new ', ' at '); // If our component frame is labeled "<anonymous>"
-                // but we have a user-provided "displayName"
-                // splice it in to make the stack more readable.
-
-
-                if (fn.displayName && _frame.includes('<anonymous>')) {
-                  _frame = _frame.replace('<anonymous>', fn.displayName);
-                }
-
-                {
-                  if (typeof fn === 'function') {
-                    componentFrameCache.set(fn, _frame);
-                  }
-                } // Return the line we found.
-
-
-                return _frame;
-              }
-            } while (s >= 1 && c >= 0);
-          }
-
-          break;
-        }
-      }
-    }
-  } finally {
-    reentry = false;
-
-    {
-      ReactCurrentDispatcher$1.current = previousDispatcher;
-      reenableLogs();
-    }
-
-    Error.prepareStackTrace = previousPrepareStackTrace;
-  } // Fallback to just using the name if we couldn't make it throw.
-
-
-  var name = fn ? fn.displayName || fn.name : '';
-  var syntheticFrame = name ? describeBuiltInComponentFrame(name) : '';
-
-  {
-    if (typeof fn === 'function') {
-      componentFrameCache.set(fn, syntheticFrame);
-    }
-  }
-
-  return syntheticFrame;
-}
-function describeFunctionComponentFrame(fn, source, ownerFn) {
-  {
-    return describeNativeComponentFrame(fn, false);
-  }
-}
-
-function shouldConstruct(Component) {
-  var prototype = Component.prototype;
-  return !!(prototype && prototype.isReactComponent);
-}
-
-function describeUnknownElementTypeFrameInDEV(type, source, ownerFn) {
-
-  if (type == null) {
-    return '';
-  }
-
-  if (typeof type === 'function') {
-    {
-      return describeNativeComponentFrame(type, shouldConstruct(type));
-    }
-  }
-
-  if (typeof type === 'string') {
-    return describeBuiltInComponentFrame(type);
-  }
-
-  switch (type) {
-    case REACT_SUSPENSE_TYPE:
-      return describeBuiltInComponentFrame('Suspense');
-
-    case REACT_SUSPENSE_LIST_TYPE:
-      return describeBuiltInComponentFrame('SuspenseList');
-  }
-
-  if (typeof type === 'object') {
-    switch (type.$$typeof) {
-      case REACT_FORWARD_REF_TYPE:
-        return describeFunctionComponentFrame(type.render);
-
-      case REACT_MEMO_TYPE:
-        // Memo may contain any component type so we recursively resolve it.
-        return describeUnknownElementTypeFrameInDEV(type.type, source, ownerFn);
-
-      case REACT_LAZY_TYPE:
-        {
-          var lazyComponent = type;
-          var payload = lazyComponent._payload;
-          var init = lazyComponent._init;
-
-          try {
-            // Lazy may contain any component type so we recursively resolve it.
-            return describeUnknownElementTypeFrameInDEV(init(payload), source, ownerFn);
-          } catch (x) {}
-        }
-    }
-  }
-
-  return '';
-}
-
-var loggedTypeFailures = {};
-var ReactDebugCurrentFrame$1 = ReactSharedInternals.ReactDebugCurrentFrame;
-
-function setCurrentlyValidatingElement(element) {
-  {
-    if (element) {
-      var owner = element._owner;
-      var stack = describeUnknownElementTypeFrameInDEV(element.type, element._source, owner ? owner.type : null);
-      ReactDebugCurrentFrame$1.setExtraStackFrame(stack);
-    } else {
-      ReactDebugCurrentFrame$1.setExtraStackFrame(null);
-    }
-  }
-}
-
-function checkPropTypes(typeSpecs, values, location, componentName, element) {
-  {
-    // $FlowFixMe This is okay but Flow doesn't know it.
-    var has = Function.call.bind(hasOwnProperty);
-
-    for (var typeSpecName in typeSpecs) {
-      if (has(typeSpecs, typeSpecName)) {
-        var error$1 = void 0; // Prop type validation may throw. In case they do, we don't want to
-        // fail the render phase where it didn't fail before. So we log it.
-        // After these have been cleaned up, we'll let them throw.
-
-        try {
-          // This is intentionally an invariant that gets caught. It's the same
-          // behavior as without this statement except with a better message.
-          if (typeof typeSpecs[typeSpecName] !== 'function') {
-            // eslint-disable-next-line react-internal/prod-error-codes
-            var err = Error((componentName || 'React class') + ': ' + location + ' type `' + typeSpecName + '` is invalid; ' + 'it must be a function, usually from the `prop-types` package, but received `' + typeof typeSpecs[typeSpecName] + '`.' + 'This often happens because of typos such as `PropTypes.function` instead of `PropTypes.func`.');
-            err.name = 'Invariant Violation';
-            throw err;
-          }
-
-          error$1 = typeSpecs[typeSpecName](values, typeSpecName, componentName, location, null, 'SECRET_DO_NOT_PASS_THIS_OR_YOU_WILL_BE_FIRED');
-        } catch (ex) {
-          error$1 = ex;
-        }
-
-        if (error$1 && !(error$1 instanceof Error)) {
-          setCurrentlyValidatingElement(element);
-
-          error('%s: type specification of %s' + ' `%s` is invalid; the type checker ' + 'function must return `null` or an `Error` but returned a %s. ' + 'You may have forgotten to pass an argument to the type checker ' + 'creator (arrayOf, instanceOf, objectOf, oneOf, oneOfType, and ' + 'shape all require an argument).', componentName || 'React class', location, typeSpecName, typeof error$1);
-
-          setCurrentlyValidatingElement(null);
-        }
-
-        if (error$1 instanceof Error && !(error$1.message in loggedTypeFailures)) {
-          // Only monitor this failure once because there tends to be a lot of the
-          // same error.
-          loggedTypeFailures[error$1.message] = true;
-          setCurrentlyValidatingElement(element);
-
-          error('Failed %s type: %s', location, error$1.message);
-
-          setCurrentlyValidatingElement(null);
-        }
-      }
-    }
-  }
-}
-
-function setCurrentlyValidatingElement$1(element) {
-  {
-    if (element) {
-      var owner = element._owner;
-      var stack = describeUnknownElementTypeFrameInDEV(element.type, element._source, owner ? owner.type : null);
-      setExtraStackFrame(stack);
-    } else {
-      setExtraStackFrame(null);
-    }
-  }
-}
-
-var propTypesMisspellWarningShown;
-
-{
-  propTypesMisspellWarningShown = false;
-}
-
-function getDeclarationErrorAddendum() {
-  if (ReactCurrentOwner.current) {
-    var name = getComponentNameFromType(ReactCurrentOwner.current.type);
-
-    if (name) {
-      return '\n\nCheck the render method of `' + name + '`.';
-    }
-  }
-
-  return '';
-}
-
-function getSourceInfoErrorAddendum(source) {
-  if (source !== undefined) {
-    var fileName = source.fileName.replace(/^.*[\\\/]/, '');
-    var lineNumber = source.lineNumber;
-    return '\n\nCheck your code at ' + fileName + ':' + lineNumber + '.';
-  }
-
-  return '';
-}
-
-function getSourceInfoErrorAddendumForProps(elementProps) {
-  if (elementProps !== null && elementProps !== undefined) {
-    return getSourceInfoErrorAddendum(elementProps.__source);
-  }
-
-  return '';
-}
-/**
- * Warn if there's no key explicitly set on dynamic arrays of children or
- * object keys are not valid. This allows us to keep track of children between
- * updates.
- */
-
-
-var ownerHasKeyUseWarning = {};
-
-function getCurrentComponentErrorInfo(parentType) {
-  var info = getDeclarationErrorAddendum();
-
-  if (!info) {
-    var parentName = typeof parentType === 'string' ? parentType : parentType.displayName || parentType.name;
-
-    if (parentName) {
-      info = "\n\nCheck the top-level render call using <" + parentName + ">.";
-    }
-  }
-
-  return info;
-}
-/**
- * Warn if the element doesn't have an explicit key assigned to it.
- * This element is in an array. The array could grow and shrink or be
- * reordered. All children that haven't already been validated are required to
- * have a "key" property assigned to it. Error statuses are cached so a warning
- * will only be shown once.
- *
- * @internal
- * @param {ReactElement} element Element that requires a key.
- * @param {*} parentType element's parent's type.
- */
-
-
-function validateExplicitKey(element, parentType) {
-  if (!element._store || element._store.validated || element.key != null) {
-    return;
-  }
-
-  element._store.validated = true;
-  var currentComponentErrorInfo = getCurrentComponentErrorInfo(parentType);
-
-  if (ownerHasKeyUseWarning[currentComponentErrorInfo]) {
-    return;
-  }
-
-  ownerHasKeyUseWarning[currentComponentErrorInfo] = true; // Usually the current owner is the offender, but if it accepts children as a
-  // property, it may be the creator of the child that's responsible for
-  // assigning it a key.
-
-  var childOwner = '';
-
-  if (element && element._owner && element._owner !== ReactCurrentOwner.current) {
-    // Give the component that originally created this child.
-    childOwner = " It was passed a child from " + getComponentNameFromType(element._owner.type) + ".";
-  }
-
-  {
-    setCurrentlyValidatingElement$1(element);
-
-    error('Each child in a list should have a unique "key" prop.' + '%s%s See https://reactjs.org/link/warning-keys for more information.', currentComponentErrorInfo, childOwner);
-
-    setCurrentlyValidatingElement$1(null);
-  }
-}
-/**
- * Ensure that every element either is passed in a static location, in an
- * array with an explicit keys property defined, or in an object literal
- * with valid key property.
- *
- * @internal
- * @param {ReactNode} node Statically passed child of any type.
- * @param {*} parentType node's parent's type.
- */
-
-
-function validateChildKeys(node, parentType) {
-  if (typeof node !== 'object') {
-    return;
-  }
-
-  if (isArray(node)) {
-    for (var i = 0; i < node.length; i++) {
-      var child = node[i];
-
-      if (isValidElement(child)) {
-        validateExplicitKey(child, parentType);
-      }
-    }
-  } else if (isValidElement(node)) {
-    // This element was passed in a valid location.
-    if (node._store) {
-      node._store.validated = true;
-    }
-  } else if (node) {
-    var iteratorFn = getIteratorFn(node);
-
-    if (typeof iteratorFn === 'function') {
-      // Entry iterators used to provide implicit keys,
-      // but now we print a separate warning for them later.
-      if (iteratorFn !== node.entries) {
-        var iterator = iteratorFn.call(node);
-        var step;
-
-        while (!(step = iterator.next()).done) {
-          if (isValidElement(step.value)) {
-            validateExplicitKey(step.value, parentType);
-          }
-        }
-      }
-    }
-  }
-}
-/**
- * Given an element, validate that its props follow the propTypes definition,
- * provided by the type.
- *
- * @param {ReactElement} element
- */
-
-
-function validatePropTypes(element) {
-  {
-    var type = element.type;
-
-    if (type === null || type === undefined || typeof type === 'string') {
-      return;
-    }
-
-    var propTypes;
-
-    if (typeof type === 'function') {
-      propTypes = type.propTypes;
-    } else if (typeof type === 'object' && (type.$$typeof === REACT_FORWARD_REF_TYPE || // Note: Memo only checks outer props here.
-    // Inner props are checked in the reconciler.
-    type.$$typeof === REACT_MEMO_TYPE)) {
-      propTypes = type.propTypes;
-    } else {
-      return;
-    }
-
-    if (propTypes) {
-      // Intentionally inside to avoid triggering lazy initializers:
-      var name = getComponentNameFromType(type);
-      checkPropTypes(propTypes, element.props, 'prop', name, element);
-    } else if (type.PropTypes !== undefined && !propTypesMisspellWarningShown) {
-      propTypesMisspellWarningShown = true; // Intentionally inside to avoid triggering lazy initializers:
-
-      var _name = getComponentNameFromType(type);
-
-      error('Component %s declared `PropTypes` instead of `propTypes`. Did you misspell the property assignment?', _name || 'Unknown');
-    }
-
-    if (typeof type.getDefaultProps === 'function' && !type.getDefaultProps.isReactClassApproved) {
-      error('getDefaultProps is only used on classic React.createClass ' + 'definitions. Use a static property named `defaultProps` instead.');
-    }
-  }
-}
-/**
- * Given a fragment, validate that it can only be provided with fragment props
- * @param {ReactElement} fragment
- */
-
-
-function validateFragmentProps(fragment) {
-  {
-    var keys = Object.keys(fragment.props);
-
-    for (var i = 0; i < keys.length; i++) {
-      var key = keys[i];
-
-      if (key !== 'children' && key !== 'key') {
-        setCurrentlyValidatingElement$1(fragment);
-
-        error('Invalid prop `%s` supplied to `React.Fragment`. ' + 'React.Fragment can only have `key` and `children` props.', key);
-
-        setCurrentlyValidatingElement$1(null);
-        break;
-      }
-    }
-
-    if (fragment.ref !== null) {
-      setCurrentlyValidatingElement$1(fragment);
-
-      error('Invalid attribute `ref` supplied to `React.Fragment`.');
-
-      setCurrentlyValidatingElement$1(null);
-    }
-  }
-}
-function createElementWithValidation(type, props, children) {
-  var validType = isValidElementType(type); // We warn in this case but don't throw. We expect the element creation to
-  // succeed and there will likely be errors in render.
-
-  if (!validType) {
-    var info = '';
-
-    if (type === undefined || typeof type === 'object' && type !== null && Object.keys(type).length === 0) {
-      info += ' You likely forgot to export your component from the file ' + "it's defined in, or you might have mixed up default and named imports.";
-    }
-
-    var sourceInfo = getSourceInfoErrorAddendumForProps(props);
-
-    if (sourceInfo) {
-      info += sourceInfo;
-    } else {
-      info += getDeclarationErrorAddendum();
-    }
-
-    var typeString;
-
-    if (type === null) {
-      typeString = 'null';
-    } else if (isArray(type)) {
-      typeString = 'array';
-    } else if (type !== undefined && type.$$typeof === REACT_ELEMENT_TYPE) {
-      typeString = "<" + (getComponentNameFromType(type.type) || 'Unknown') + " />";
-      info = ' Did you accidentally export a JSX literal instead of a component?';
-    } else {
-      typeString = typeof type;
-    }
-
-    {
-      error('React.createElement: type is invalid -- expected a string (for ' + 'built-in components) or a class/function (for composite ' + 'components) but got: %s.%s', typeString, info);
-    }
-  }
-
-  var element = createElement.apply(this, arguments); // The result can be nullish if a mock or a custom function is used.
-  // TODO: Drop this when these are no longer allowed as the type argument.
-
-  if (element == null) {
-    return element;
-  } // Skip key warning if the type isn't valid since our key validation logic
-  // doesn't expect a non-string/function type and can throw confusing errors.
-  // We don't want exception behavior to differ between dev and prod.
-  // (Rendering will throw with a helpful message and as soon as the type is
-  // fixed, the key warnings will appear.)
-
-
-  if (validType) {
-    for (var i = 2; i < arguments.length; i++) {
-      validateChildKeys(arguments[i], type);
-    }
-  }
-
-  if (type === REACT_FRAGMENT_TYPE) {
-    validateFragmentProps(element);
-  } else {
-    validatePropTypes(element);
-  }
-
-  return element;
-}
-var didWarnAboutDeprecatedCreateFactory = false;
-function createFactoryWithValidation(type) {
-  var validatedFactory = createElementWithValidation.bind(null, type);
-  validatedFactory.type = type;
-
-  {
-    if (!didWarnAboutDeprecatedCreateFactory) {
-      didWarnAboutDeprecatedCreateFactory = true;
-
-      warn('React.createFactory() is deprecated and will be removed in ' + 'a future major release. Consider using JSX ' + 'or use React.createElement() directly instead.');
-    } // Legacy hook: remove it
-
-
-    Object.defineProperty(validatedFactory, 'type', {
-      enumerable: false,
-      get: function () {
-        warn('Factory.type is deprecated. Access the class directly ' + 'before passing it to createFactory.');
-
-        Object.defineProperty(this, 'type', {
-          value: type
-        });
-        return type;
-      }
-    });
-  }
-
-  return validatedFactory;
-}
-function cloneElementWithValidation(element, props, children) {
-  var newElement = cloneElement.apply(this, arguments);
-
-  for (var i = 2; i < arguments.length; i++) {
-    validateChildKeys(arguments[i], newElement.type);
-  }
-
-  validatePropTypes(newElement);
-  return newElement;
-}
-
-function startTransition(scope, options) {
-  var prevTransition = ReactCurrentBatchConfig.transition;
-  ReactCurrentBatchConfig.transition = {};
-  var currentTransition = ReactCurrentBatchConfig.transition;
-
-  {
-    ReactCurrentBatchConfig.transition._updatedFibers = new Set();
-  }
-
-  try {
-    scope();
-  } finally {
-    ReactCurrentBatchConfig.transition = prevTransition;
-
-    {
-      if (prevTransition === null && currentTransition._updatedFibers) {
-        var updatedFibersCount = currentTransition._updatedFibers.size;
-
-        if (updatedFibersCount > 10) {
-          warn('Detected a large number of updates inside startTransition. ' + 'If this is due to a subscription please re-write it to use React provided hooks. ' + 'Otherwise concurrent mode guarantees are off the table.');
-        }
-
-        currentTransition._updatedFibers.clear();
-      }
-    }
-  }
-}
-
-var didWarnAboutMessageChannel = false;
-var enqueueTaskImpl = null;
-function enqueueTask(task) {
-  if (enqueueTaskImpl === null) {
-    try {
-      // read require off the module object to get around the bundlers.
-      // we don't want them to detect a require and bundle a Node polyfill.
-      var requireString = ('require' + Math.random()).slice(0, 7);
-      var nodeRequire = module && module[requireString]; // assuming we're in node, let's try to get node's
-      // version of setImmediate, bypassing fake timers if any.
-
-      enqueueTaskImpl = nodeRequire.call(module, 'timers').setImmediate;
-    } catch (_err) {
-      // we're in a browser
-      // we can't use regular timers because they may still be faked
-      // so we try MessageChannel+postMessage instead
-      enqueueTaskImpl = function (callback) {
-        {
-          if (didWarnAboutMessageChannel === false) {
-            didWarnAboutMessageChannel = true;
-
-            if (typeof MessageChannel === 'undefined') {
-              error('This browser does not have a MessageChannel implementation, ' + 'so enqueuing tasks via await act(async () => ...) will fail. ' + 'Please file an issue at https://github.com/facebook/react/issues ' + 'if you encounter this warning.');
-            }
-          }
-        }
-
-        var channel = new MessageChannel();
-        channel.port1.onmessage = callback;
-        channel.port2.postMessage(undefined);
-      };
-    }
-  }
-
-  return enqueueTaskImpl(task);
-}
-
-var actScopeDepth = 0;
-var didWarnNoAwaitAct = false;
-function act(callback) {
-  {
-    // `act` calls can be nested, so we track the depth. This represents the
-    // number of `act` scopes on the stack.
-    var prevActScopeDepth = actScopeDepth;
-    actScopeDepth++;
-
-    if (ReactCurrentActQueue.current === null) {
-      // This is the outermost `act` scope. Initialize the queue. The reconciler
-      // will detect the queue and use it instead of Scheduler.
-      ReactCurrentActQueue.current = [];
-    }
-
-    var prevIsBatchingLegacy = ReactCurrentActQueue.isBatchingLegacy;
-    var result;
-
-    try {
-      // Used to reproduce behavior of `batchedUpdates` in legacy mode. Only
-      // set to `true` while the given callback is executed, not for updates
-      // triggered during an async event, because this is how the legacy
-      // implementation of `act` behaved.
-      ReactCurrentActQueue.isBatchingLegacy = true;
-      result = callback(); // Replicate behavior of original `act` implementation in legacy mode,
-      // which flushed updates immediately after the scope function exits, even
-      // if it's an async function.
-
-      if (!prevIsBatchingLegacy && ReactCurrentActQueue.didScheduleLegacyUpdate) {
-        var queue = ReactCurrentActQueue.current;
-
-        if (queue !== null) {
-          ReactCurrentActQueue.didScheduleLegacyUpdate = false;
-          flushActQueue(queue);
-        }
-      }
-    } catch (error) {
-      popActScope(prevActScopeDepth);
-      throw error;
-    } finally {
-      ReactCurrentActQueue.isBatchingLegacy = prevIsBatchingLegacy;
-    }
-
-    if (result !== null && typeof result === 'object' && typeof result.then === 'function') {
-      var thenableResult = result; // The callback is an async function (i.e. returned a promise). Wait
-      // for it to resolve before exiting the current scope.
-
-      var wasAwaited = false;
-      var thenable = {
-        then: function (resolve, reject) {
-          wasAwaited = true;
-          thenableResult.then(function (returnValue) {
-            popActScope(prevActScopeDepth);
-
-            if (actScopeDepth === 0) {
-              // We've exited the outermost act scope. Recursively flush the
-              // queue until there's no remaining work.
-              recursivelyFlushAsyncActWork(returnValue, resolve, reject);
-            } else {
-              resolve(returnValue);
-            }
-          }, function (error) {
-            // The callback threw an error.
-            popActScope(prevActScopeDepth);
-            reject(error);
-          });
-        }
-      };
-
-      {
-        if (!didWarnNoAwaitAct && typeof Promise !== 'undefined') {
-          // eslint-disable-next-line no-undef
-          Promise.resolve().then(function () {}).then(function () {
-            if (!wasAwaited) {
-              didWarnNoAwaitAct = true;
-
-              error('You called act(async () => ...) without await. ' + 'This could lead to unexpected testing behaviour, ' + 'interleaving multiple act calls and mixing their ' + 'scopes. ' + 'You should - await act(async () => ...);');
-            }
-          });
-        }
-      }
-
-      return thenable;
-    } else {
-      var returnValue = result; // The callback is not an async function. Exit the current scope
-      // immediately, without awaiting.
-
-      popActScope(prevActScopeDepth);
-
-      if (actScopeDepth === 0) {
-        // Exiting the outermost act scope. Flush the queue.
-        var _queue = ReactCurrentActQueue.current;
-
-        if (_queue !== null) {
-          flushActQueue(_queue);
-          ReactCurrentActQueue.current = null;
-        } // Return a thenable. If the user awaits it, we'll flush again in
-        // case additional work was scheduled by a microtask.
-
-
-        var _thenable = {
-          then: function (resolve, reject) {
-            // Confirm we haven't re-entered another `act` scope, in case
-            // the user does something weird like await the thenable
-            // multiple times.
-            if (ReactCurrentActQueue.current === null) {
-              // Recursively flush the queue until there's no remaining work.
-              ReactCurrentActQueue.current = [];
-              recursivelyFlushAsyncActWork(returnValue, resolve, reject);
-            } else {
-              resolve(returnValue);
-            }
-          }
-        };
-        return _thenable;
-      } else {
-        // Since we're inside a nested `act` scope, the returned thenable
-        // immediately resolves. The outer scope will flush the queue.
-        var _thenable2 = {
-          then: function (resolve, reject) {
-            resolve(returnValue);
-          }
-        };
-        return _thenable2;
-      }
-    }
-  }
-}
-
-function popActScope(prevActScopeDepth) {
-  {
-    if (prevActScopeDepth !== actScopeDepth - 1) {
-      error('You seem to have overlapping act() calls, this is not supported. ' + 'Be sure to await previous act() calls before making a new one. ');
-    }
-
-    actScopeDepth = prevActScopeDepth;
-  }
-}
-
-function recursivelyFlushAsyncActWork(returnValue, resolve, reject) {
-  {
-    var queue = ReactCurrentActQueue.current;
-
-    if (queue !== null) {
-      try {
-        flushActQueue(queue);
-        enqueueTask(function () {
-          if (queue.length === 0) {
-            // No additional work was scheduled. Finish.
-            ReactCurrentActQueue.current = null;
-            resolve(returnValue);
-          } else {
-            // Keep flushing work until there's none left.
-            recursivelyFlushAsyncActWork(returnValue, resolve, reject);
-          }
-        });
-      } catch (error) {
-        reject(error);
-      }
-    } else {
-      resolve(returnValue);
-    }
-  }
-}
-
-var isFlushing = false;
-
-function flushActQueue(queue) {
-  {
-    if (!isFlushing) {
-      // Prevent re-entrance.
-      isFlushing = true;
-      var i = 0;
-
-      try {
-        for (; i < queue.length; i++) {
-          var callback = queue[i];
-
-          do {
-            callback = callback(true);
-          } while (callback !== null);
-        }
-
-        queue.length = 0;
-      } catch (error) {
-        // If something throws, leave the remaining callbacks on the queue.
-        queue = queue.slice(i + 1);
-        throw error;
-      } finally {
-        isFlushing = false;
-      }
-    }
-  }
-}
-
-var createElement$1 =  createElementWithValidation ;
-var cloneElement$1 =  cloneElementWithValidation ;
-var createFactory =  createFactoryWithValidation ;
-var Children = {
-  map: mapChildren,
-  forEach: forEachChildren,
-  count: countChildren,
-  toArray: toArray,
-  only: onlyChild
-};
-
-exports.Children = Children;
-exports.Component = Component;
-exports.Fragment = REACT_FRAGMENT_TYPE;
-exports.Profiler = REACT_PROFILER_TYPE;
-exports.PureComponent = PureComponent;
-exports.StrictMode = REACT_STRICT_MODE_TYPE;
-exports.Suspense = REACT_SUSPENSE_TYPE;
-exports.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = ReactSharedInternals;
-exports.act = act;
-exports.cloneElement = cloneElement$1;
-exports.createContext = createContext;
-exports.createElement = createElement$1;
-exports.createFactory = createFactory;
-exports.createRef = createRef;
-exports.forwardRef = forwardRef;
-exports.isValidElement = isValidElement;
-exports.lazy = lazy;
-exports.memo = memo;
-exports.startTransition = startTransition;
-exports.unstable_act = act;
-exports.useCallback = useCallback;
-exports.useContext = useContext;
-exports.useDebugValue = useDebugValue;
-exports.useDeferredValue = useDeferredValue;
-exports.useEffect = useEffect;
-exports.useId = useId;
-exports.useImperativeHandle = useImperativeHandle;
-exports.useInsertionEffect = useInsertionEffect;
-exports.useLayoutEffect = useLayoutEffect;
-exports.useMemo = useMemo;
-exports.useReducer = useReducer;
-exports.useRef = useRef;
-exports.useState = useState;
-exports.useSyncExternalStore = useSyncExternalStore;
-exports.useTransition = useTransition;
-exports.version = ReactVersion;
-          /* global __REACT_DEVTOOLS_GLOBAL_HOOK__ */
-if (
-  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== 'undefined' &&
-  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop ===
-    'function'
-) {
-  __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(new Error());
-}
-        
-  })();
-}
-
-
-/***/ },
-
-/***/ "./node_modules/react-dom/node_modules/react/index.js"
-/*!************************************************************!*\
-  !*** ./node_modules/react-dom/node_modules/react/index.js ***!
-  \************************************************************/
-(module, __unused_webpack_exports, __webpack_require__) {
-
-
-
-if (false) // removed by dead control flow
-{} else {
-  module.exports = __webpack_require__(/*! ./cjs/react.development.js */ "./node_modules/react-dom/node_modules/react/cjs/react.development.js");
-}
-
-
-/***/ },
-
-/***/ "./node_modules/react-dom/node_modules/scheduler/cjs/scheduler.development.js"
-/*!************************************************************************************!*\
-  !*** ./node_modules/react-dom/node_modules/scheduler/cjs/scheduler.development.js ***!
-  \************************************************************************************/
-(__unused_webpack_module, exports) {
-
-/**
- * @license React
- * scheduler.development.js
- *
- * Copyright (c) Facebook, Inc. and its affiliates.
- *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
- */
-
-
-
-if (true) {
-  (function() {
-
-          'use strict';
-
-/* global __REACT_DEVTOOLS_GLOBAL_HOOK__ */
-if (
-  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== 'undefined' &&
-  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart ===
-    'function'
-) {
-  __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
-}
-          var enableSchedulerDebugging = false;
-var enableProfiling = false;
-var frameYieldMs = 5;
-
-function push(heap, node) {
-  var index = heap.length;
-  heap.push(node);
-  siftUp(heap, node, index);
-}
-function peek(heap) {
-  return heap.length === 0 ? null : heap[0];
-}
-function pop(heap) {
-  if (heap.length === 0) {
-    return null;
-  }
-
-  var first = heap[0];
-  var last = heap.pop();
-
-  if (last !== first) {
-    heap[0] = last;
-    siftDown(heap, last, 0);
-  }
-
-  return first;
-}
-
-function siftUp(heap, node, i) {
-  var index = i;
-
-  while (index > 0) {
-    var parentIndex = index - 1 >>> 1;
-    var parent = heap[parentIndex];
-
-    if (compare(parent, node) > 0) {
-      // The parent is larger. Swap positions.
-      heap[parentIndex] = node;
-      heap[index] = parent;
-      index = parentIndex;
-    } else {
-      // The parent is smaller. Exit.
-      return;
-    }
-  }
-}
-
-function siftDown(heap, node, i) {
-  var index = i;
-  var length = heap.length;
-  var halfLength = length >>> 1;
-
-  while (index < halfLength) {
-    var leftIndex = (index + 1) * 2 - 1;
-    var left = heap[leftIndex];
-    var rightIndex = leftIndex + 1;
-    var right = heap[rightIndex]; // If the left or right node is smaller, swap with the smaller of those.
-
-    if (compare(left, node) < 0) {
-      if (rightIndex < length && compare(right, left) < 0) {
-        heap[index] = right;
-        heap[rightIndex] = node;
-        index = rightIndex;
-      } else {
-        heap[index] = left;
-        heap[leftIndex] = node;
-        index = leftIndex;
-      }
-    } else if (rightIndex < length && compare(right, node) < 0) {
-      heap[index] = right;
-      heap[rightIndex] = node;
-      index = rightIndex;
-    } else {
-      // Neither child is smaller. Exit.
-      return;
-    }
-  }
-}
-
-function compare(a, b) {
-  // Compare sort index first, then task id.
-  var diff = a.sortIndex - b.sortIndex;
-  return diff !== 0 ? diff : a.id - b.id;
-}
-
-// TODO: Use symbols?
-var ImmediatePriority = 1;
-var UserBlockingPriority = 2;
-var NormalPriority = 3;
-var LowPriority = 4;
-var IdlePriority = 5;
-
-function markTaskErrored(task, ms) {
-}
-
-/* eslint-disable no-var */
-
-var hasPerformanceNow = typeof performance === 'object' && typeof performance.now === 'function';
-
-if (hasPerformanceNow) {
-  var localPerformance = performance;
-
-  exports.unstable_now = function () {
-    return localPerformance.now();
-  };
-} else {
-  var localDate = Date;
-  var initialTime = localDate.now();
-
-  exports.unstable_now = function () {
-    return localDate.now() - initialTime;
-  };
-} // Max 31 bit integer. The max integer size in V8 for 32-bit systems.
-// Math.pow(2, 30) - 1
-// 0b111111111111111111111111111111
-
-
-var maxSigned31BitInt = 1073741823; // Times out immediately
-
-var IMMEDIATE_PRIORITY_TIMEOUT = -1; // Eventually times out
-
-var USER_BLOCKING_PRIORITY_TIMEOUT = 250;
-var NORMAL_PRIORITY_TIMEOUT = 5000;
-var LOW_PRIORITY_TIMEOUT = 10000; // Never times out
-
-var IDLE_PRIORITY_TIMEOUT = maxSigned31BitInt; // Tasks are stored on a min heap
-
-var taskQueue = [];
-var timerQueue = []; // Incrementing id counter. Used to maintain insertion order.
-
-var taskIdCounter = 1; // Pausing the scheduler is useful for debugging.
-var currentTask = null;
-var currentPriorityLevel = NormalPriority; // This is set while performing work, to prevent re-entrance.
-
-var isPerformingWork = false;
-var isHostCallbackScheduled = false;
-var isHostTimeoutScheduled = false; // Capture local references to native APIs, in case a polyfill overrides them.
-
-var localSetTimeout = typeof setTimeout === 'function' ? setTimeout : null;
-var localClearTimeout = typeof clearTimeout === 'function' ? clearTimeout : null;
-var localSetImmediate = typeof setImmediate !== 'undefined' ? setImmediate : null; // IE and Node.js + jsdom
-
-var isInputPending = typeof navigator !== 'undefined' && navigator.scheduling !== undefined && navigator.scheduling.isInputPending !== undefined ? navigator.scheduling.isInputPending.bind(navigator.scheduling) : null;
-
-function advanceTimers(currentTime) {
-  // Check for tasks that are no longer delayed and add them to the queue.
-  var timer = peek(timerQueue);
-
-  while (timer !== null) {
-    if (timer.callback === null) {
-      // Timer was cancelled.
-      pop(timerQueue);
-    } else if (timer.startTime <= currentTime) {
-      // Timer fired. Transfer to the task queue.
-      pop(timerQueue);
-      timer.sortIndex = timer.expirationTime;
-      push(taskQueue, timer);
-    } else {
-      // Remaining timers are pending.
-      return;
-    }
-
-    timer = peek(timerQueue);
-  }
-}
-
-function handleTimeout(currentTime) {
-  isHostTimeoutScheduled = false;
-  advanceTimers(currentTime);
-
-  if (!isHostCallbackScheduled) {
-    if (peek(taskQueue) !== null) {
-      isHostCallbackScheduled = true;
-      requestHostCallback(flushWork);
-    } else {
-      var firstTimer = peek(timerQueue);
-
-      if (firstTimer !== null) {
-        requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
-      }
-    }
-  }
-}
-
-function flushWork(hasTimeRemaining, initialTime) {
-
-
-  isHostCallbackScheduled = false;
-
-  if (isHostTimeoutScheduled) {
-    // We scheduled a timeout but it's no longer needed. Cancel it.
-    isHostTimeoutScheduled = false;
-    cancelHostTimeout();
-  }
-
-  isPerformingWork = true;
-  var previousPriorityLevel = currentPriorityLevel;
-
-  try {
-    if (enableProfiling) {
-      try {
-        return workLoop(hasTimeRemaining, initialTime);
-      } catch (error) {
-        if (currentTask !== null) {
-          var currentTime = exports.unstable_now();
-          markTaskErrored(currentTask, currentTime);
-          currentTask.isQueued = false;
-        }
-
-        throw error;
-      }
-    } else {
-      // No catch in prod code path.
-      return workLoop(hasTimeRemaining, initialTime);
-    }
-  } finally {
-    currentTask = null;
-    currentPriorityLevel = previousPriorityLevel;
-    isPerformingWork = false;
-  }
-}
-
-function workLoop(hasTimeRemaining, initialTime) {
-  var currentTime = initialTime;
-  advanceTimers(currentTime);
-  currentTask = peek(taskQueue);
-
-  while (currentTask !== null && !(enableSchedulerDebugging )) {
-    if (currentTask.expirationTime > currentTime && (!hasTimeRemaining || shouldYieldToHost())) {
-      // This currentTask hasn't expired, and we've reached the deadline.
-      break;
-    }
-
-    var callback = currentTask.callback;
-
-    if (typeof callback === 'function') {
-      currentTask.callback = null;
-      currentPriorityLevel = currentTask.priorityLevel;
-      var didUserCallbackTimeout = currentTask.expirationTime <= currentTime;
-
-      var continuationCallback = callback(didUserCallbackTimeout);
-      currentTime = exports.unstable_now();
-
-      if (typeof continuationCallback === 'function') {
-        currentTask.callback = continuationCallback;
-      } else {
-
-        if (currentTask === peek(taskQueue)) {
-          pop(taskQueue);
-        }
-      }
-
-      advanceTimers(currentTime);
-    } else {
-      pop(taskQueue);
-    }
-
-    currentTask = peek(taskQueue);
-  } // Return whether there's additional work
-
-
-  if (currentTask !== null) {
-    return true;
-  } else {
-    var firstTimer = peek(timerQueue);
-
-    if (firstTimer !== null) {
-      requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
-    }
-
-    return false;
-  }
-}
-
-function unstable_runWithPriority(priorityLevel, eventHandler) {
-  switch (priorityLevel) {
-    case ImmediatePriority:
-    case UserBlockingPriority:
-    case NormalPriority:
-    case LowPriority:
-    case IdlePriority:
-      break;
-
-    default:
-      priorityLevel = NormalPriority;
-  }
-
-  var previousPriorityLevel = currentPriorityLevel;
-  currentPriorityLevel = priorityLevel;
-
-  try {
-    return eventHandler();
-  } finally {
-    currentPriorityLevel = previousPriorityLevel;
-  }
-}
-
-function unstable_next(eventHandler) {
-  var priorityLevel;
-
-  switch (currentPriorityLevel) {
-    case ImmediatePriority:
-    case UserBlockingPriority:
-    case NormalPriority:
-      // Shift down to normal priority
-      priorityLevel = NormalPriority;
-      break;
-
-    default:
-      // Anything lower than normal priority should remain at the current level.
-      priorityLevel = currentPriorityLevel;
-      break;
-  }
-
-  var previousPriorityLevel = currentPriorityLevel;
-  currentPriorityLevel = priorityLevel;
-
-  try {
-    return eventHandler();
-  } finally {
-    currentPriorityLevel = previousPriorityLevel;
-  }
-}
-
-function unstable_wrapCallback(callback) {
-  var parentPriorityLevel = currentPriorityLevel;
-  return function () {
-    // This is a fork of runWithPriority, inlined for performance.
-    var previousPriorityLevel = currentPriorityLevel;
-    currentPriorityLevel = parentPriorityLevel;
-
-    try {
-      return callback.apply(this, arguments);
-    } finally {
-      currentPriorityLevel = previousPriorityLevel;
-    }
-  };
-}
-
-function unstable_scheduleCallback(priorityLevel, callback, options) {
-  var currentTime = exports.unstable_now();
-  var startTime;
-
-  if (typeof options === 'object' && options !== null) {
-    var delay = options.delay;
-
-    if (typeof delay === 'number' && delay > 0) {
-      startTime = currentTime + delay;
-    } else {
-      startTime = currentTime;
-    }
-  } else {
-    startTime = currentTime;
-  }
-
-  var timeout;
-
-  switch (priorityLevel) {
-    case ImmediatePriority:
-      timeout = IMMEDIATE_PRIORITY_TIMEOUT;
-      break;
-
-    case UserBlockingPriority:
-      timeout = USER_BLOCKING_PRIORITY_TIMEOUT;
-      break;
-
-    case IdlePriority:
-      timeout = IDLE_PRIORITY_TIMEOUT;
-      break;
-
-    case LowPriority:
-      timeout = LOW_PRIORITY_TIMEOUT;
-      break;
-
-    case NormalPriority:
-    default:
-      timeout = NORMAL_PRIORITY_TIMEOUT;
-      break;
-  }
-
-  var expirationTime = startTime + timeout;
-  var newTask = {
-    id: taskIdCounter++,
-    callback: callback,
-    priorityLevel: priorityLevel,
-    startTime: startTime,
-    expirationTime: expirationTime,
-    sortIndex: -1
-  };
-
-  if (startTime > currentTime) {
-    // This is a delayed task.
-    newTask.sortIndex = startTime;
-    push(timerQueue, newTask);
-
-    if (peek(taskQueue) === null && newTask === peek(timerQueue)) {
-      // All tasks are delayed, and this is the task with the earliest delay.
-      if (isHostTimeoutScheduled) {
-        // Cancel an existing timeout.
-        cancelHostTimeout();
-      } else {
-        isHostTimeoutScheduled = true;
-      } // Schedule a timeout.
-
-
-      requestHostTimeout(handleTimeout, startTime - currentTime);
-    }
-  } else {
-    newTask.sortIndex = expirationTime;
-    push(taskQueue, newTask);
-    // wait until the next time we yield.
-
-
-    if (!isHostCallbackScheduled && !isPerformingWork) {
-      isHostCallbackScheduled = true;
-      requestHostCallback(flushWork);
-    }
-  }
-
-  return newTask;
-}
-
-function unstable_pauseExecution() {
-}
-
-function unstable_continueExecution() {
-
-  if (!isHostCallbackScheduled && !isPerformingWork) {
-    isHostCallbackScheduled = true;
-    requestHostCallback(flushWork);
-  }
-}
-
-function unstable_getFirstCallbackNode() {
-  return peek(taskQueue);
-}
-
-function unstable_cancelCallback(task) {
-  // remove from the queue because you can't remove arbitrary nodes from an
-  // array based heap, only the first one.)
-
-
-  task.callback = null;
-}
-
-function unstable_getCurrentPriorityLevel() {
-  return currentPriorityLevel;
-}
-
-var isMessageLoopRunning = false;
-var scheduledHostCallback = null;
-var taskTimeoutID = -1; // Scheduler periodically yields in case there is other work on the main
-// thread, like user events. By default, it yields multiple times per frame.
-// It does not attempt to align with frame boundaries, since most tasks don't
-// need to be frame aligned; for those that do, use requestAnimationFrame.
-
-var frameInterval = frameYieldMs;
-var startTime = -1;
-
-function shouldYieldToHost() {
-  var timeElapsed = exports.unstable_now() - startTime;
-
-  if (timeElapsed < frameInterval) {
-    // The main thread has only been blocked for a really short amount of time;
-    // smaller than a single frame. Don't yield yet.
-    return false;
-  } // The main thread has been blocked for a non-negligible amount of time. We
-
-
-  return true;
-}
-
-function requestPaint() {
-
-}
-
-function forceFrameRate(fps) {
-  if (fps < 0 || fps > 125) {
-    // Using console['error'] to evade Babel and ESLint
-    console['error']('forceFrameRate takes a positive int between 0 and 125, ' + 'forcing frame rates higher than 125 fps is not supported');
-    return;
-  }
-
-  if (fps > 0) {
-    frameInterval = Math.floor(1000 / fps);
-  } else {
-    // reset the framerate
-    frameInterval = frameYieldMs;
-  }
-}
-
-var performWorkUntilDeadline = function () {
-  if (scheduledHostCallback !== null) {
-    var currentTime = exports.unstable_now(); // Keep track of the start time so we can measure how long the main thread
-    // has been blocked.
-
-    startTime = currentTime;
-    var hasTimeRemaining = true; // If a scheduler task throws, exit the current browser task so the
-    // error can be observed.
-    //
-    // Intentionally not using a try-catch, since that makes some debugging
-    // techniques harder. Instead, if `scheduledHostCallback` errors, then
-    // `hasMoreWork` will remain true, and we'll continue the work loop.
-
-    var hasMoreWork = true;
-
-    try {
-      hasMoreWork = scheduledHostCallback(hasTimeRemaining, currentTime);
-    } finally {
-      if (hasMoreWork) {
-        // If there's more work, schedule the next message event at the end
-        // of the preceding one.
-        schedulePerformWorkUntilDeadline();
-      } else {
-        isMessageLoopRunning = false;
-        scheduledHostCallback = null;
-      }
-    }
-  } else {
-    isMessageLoopRunning = false;
-  } // Yielding to the browser will give it a chance to paint, so we can
-};
-
-var schedulePerformWorkUntilDeadline;
-
-if (typeof localSetImmediate === 'function') {
-  // Node.js and old IE.
-  // There's a few reasons for why we prefer setImmediate.
-  //
-  // Unlike MessageChannel, it doesn't prevent a Node.js process from exiting.
-  // (Even though this is a DOM fork of the Scheduler, you could get here
-  // with a mix of Node.js 15+, which has a MessageChannel, and jsdom.)
-  // https://github.com/facebook/react/issues/20756
-  //
-  // But also, it runs earlier which is the semantic we want.
-  // If other browsers ever implement it, it's better to use it.
-  // Although both of these would be inferior to native scheduling.
-  schedulePerformWorkUntilDeadline = function () {
-    localSetImmediate(performWorkUntilDeadline);
-  };
-} else if (typeof MessageChannel !== 'undefined') {
-  // DOM and Worker environments.
-  // We prefer MessageChannel because of the 4ms setTimeout clamping.
-  var channel = new MessageChannel();
-  var port = channel.port2;
-  channel.port1.onmessage = performWorkUntilDeadline;
-
-  schedulePerformWorkUntilDeadline = function () {
-    port.postMessage(null);
-  };
-} else {
-  // We should only fallback here in non-browser environments.
-  schedulePerformWorkUntilDeadline = function () {
-    localSetTimeout(performWorkUntilDeadline, 0);
-  };
-}
-
-function requestHostCallback(callback) {
-  scheduledHostCallback = callback;
-
-  if (!isMessageLoopRunning) {
-    isMessageLoopRunning = true;
-    schedulePerformWorkUntilDeadline();
-  }
-}
-
-function requestHostTimeout(callback, ms) {
-  taskTimeoutID = localSetTimeout(function () {
-    callback(exports.unstable_now());
-  }, ms);
-}
-
-function cancelHostTimeout() {
-  localClearTimeout(taskTimeoutID);
-  taskTimeoutID = -1;
-}
-
-var unstable_requestPaint = requestPaint;
-var unstable_Profiling =  null;
-
-exports.unstable_IdlePriority = IdlePriority;
-exports.unstable_ImmediatePriority = ImmediatePriority;
-exports.unstable_LowPriority = LowPriority;
-exports.unstable_NormalPriority = NormalPriority;
-exports.unstable_Profiling = unstable_Profiling;
-exports.unstable_UserBlockingPriority = UserBlockingPriority;
-exports.unstable_cancelCallback = unstable_cancelCallback;
-exports.unstable_continueExecution = unstable_continueExecution;
-exports.unstable_forceFrameRate = forceFrameRate;
-exports.unstable_getCurrentPriorityLevel = unstable_getCurrentPriorityLevel;
-exports.unstable_getFirstCallbackNode = unstable_getFirstCallbackNode;
-exports.unstable_next = unstable_next;
-exports.unstable_pauseExecution = unstable_pauseExecution;
-exports.unstable_requestPaint = unstable_requestPaint;
-exports.unstable_runWithPriority = unstable_runWithPriority;
-exports.unstable_scheduleCallback = unstable_scheduleCallback;
-exports.unstable_shouldYield = shouldYieldToHost;
-exports.unstable_wrapCallback = unstable_wrapCallback;
-          /* global __REACT_DEVTOOLS_GLOBAL_HOOK__ */
-if (
-  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== 'undefined' &&
-  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop ===
-    'function'
-) {
-  __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(new Error());
-}
-        
-  })();
-}
-
-
-/***/ },
-
-/***/ "./node_modules/react-dom/node_modules/scheduler/index.js"
-/*!****************************************************************!*\
-  !*** ./node_modules/react-dom/node_modules/scheduler/index.js ***!
-  \****************************************************************/
-(module, __unused_webpack_exports, __webpack_require__) {
-
-
-
-if (false) // removed by dead control flow
-{} else {
-  module.exports = __webpack_require__(/*! ./cjs/scheduler.development.js */ "./node_modules/react-dom/node_modules/scheduler/cjs/scheduler.development.js");
-}
-
-
-/***/ },
-
 /***/ "./node_modules/react/cjs/react.development.js"
 /*!*****************************************************!*\
   !*** ./node_modules/react/cjs/react.development.js ***!
@@ -36196,6 +32769,666 @@ if (false) // removed by dead control flow
 
 /***/ },
 
+/***/ "./node_modules/scheduler/cjs/scheduler.development.js"
+/*!*************************************************************!*\
+  !*** ./node_modules/scheduler/cjs/scheduler.development.js ***!
+  \*************************************************************/
+(__unused_webpack_module, exports) {
+
+/**
+ * @license React
+ * scheduler.development.js
+ *
+ * Copyright (c) Facebook, Inc. and its affiliates.
+ *
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
+
+
+
+if (true) {
+  (function() {
+
+          'use strict';
+
+/* global __REACT_DEVTOOLS_GLOBAL_HOOK__ */
+if (
+  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== 'undefined' &&
+  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart ===
+    'function'
+) {
+  __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStart(new Error());
+}
+          var enableSchedulerDebugging = false;
+var enableProfiling = false;
+var frameYieldMs = 5;
+
+function push(heap, node) {
+  var index = heap.length;
+  heap.push(node);
+  siftUp(heap, node, index);
+}
+function peek(heap) {
+  return heap.length === 0 ? null : heap[0];
+}
+function pop(heap) {
+  if (heap.length === 0) {
+    return null;
+  }
+
+  var first = heap[0];
+  var last = heap.pop();
+
+  if (last !== first) {
+    heap[0] = last;
+    siftDown(heap, last, 0);
+  }
+
+  return first;
+}
+
+function siftUp(heap, node, i) {
+  var index = i;
+
+  while (index > 0) {
+    var parentIndex = index - 1 >>> 1;
+    var parent = heap[parentIndex];
+
+    if (compare(parent, node) > 0) {
+      // The parent is larger. Swap positions.
+      heap[parentIndex] = node;
+      heap[index] = parent;
+      index = parentIndex;
+    } else {
+      // The parent is smaller. Exit.
+      return;
+    }
+  }
+}
+
+function siftDown(heap, node, i) {
+  var index = i;
+  var length = heap.length;
+  var halfLength = length >>> 1;
+
+  while (index < halfLength) {
+    var leftIndex = (index + 1) * 2 - 1;
+    var left = heap[leftIndex];
+    var rightIndex = leftIndex + 1;
+    var right = heap[rightIndex]; // If the left or right node is smaller, swap with the smaller of those.
+
+    if (compare(left, node) < 0) {
+      if (rightIndex < length && compare(right, left) < 0) {
+        heap[index] = right;
+        heap[rightIndex] = node;
+        index = rightIndex;
+      } else {
+        heap[index] = left;
+        heap[leftIndex] = node;
+        index = leftIndex;
+      }
+    } else if (rightIndex < length && compare(right, node) < 0) {
+      heap[index] = right;
+      heap[rightIndex] = node;
+      index = rightIndex;
+    } else {
+      // Neither child is smaller. Exit.
+      return;
+    }
+  }
+}
+
+function compare(a, b) {
+  // Compare sort index first, then task id.
+  var diff = a.sortIndex - b.sortIndex;
+  return diff !== 0 ? diff : a.id - b.id;
+}
+
+// TODO: Use symbols?
+var ImmediatePriority = 1;
+var UserBlockingPriority = 2;
+var NormalPriority = 3;
+var LowPriority = 4;
+var IdlePriority = 5;
+
+function markTaskErrored(task, ms) {
+}
+
+/* eslint-disable no-var */
+
+var hasPerformanceNow = typeof performance === 'object' && typeof performance.now === 'function';
+
+if (hasPerformanceNow) {
+  var localPerformance = performance;
+
+  exports.unstable_now = function () {
+    return localPerformance.now();
+  };
+} else {
+  var localDate = Date;
+  var initialTime = localDate.now();
+
+  exports.unstable_now = function () {
+    return localDate.now() - initialTime;
+  };
+} // Max 31 bit integer. The max integer size in V8 for 32-bit systems.
+// Math.pow(2, 30) - 1
+// 0b111111111111111111111111111111
+
+
+var maxSigned31BitInt = 1073741823; // Times out immediately
+
+var IMMEDIATE_PRIORITY_TIMEOUT = -1; // Eventually times out
+
+var USER_BLOCKING_PRIORITY_TIMEOUT = 250;
+var NORMAL_PRIORITY_TIMEOUT = 5000;
+var LOW_PRIORITY_TIMEOUT = 10000; // Never times out
+
+var IDLE_PRIORITY_TIMEOUT = maxSigned31BitInt; // Tasks are stored on a min heap
+
+var taskQueue = [];
+var timerQueue = []; // Incrementing id counter. Used to maintain insertion order.
+
+var taskIdCounter = 1; // Pausing the scheduler is useful for debugging.
+var currentTask = null;
+var currentPriorityLevel = NormalPriority; // This is set while performing work, to prevent re-entrance.
+
+var isPerformingWork = false;
+var isHostCallbackScheduled = false;
+var isHostTimeoutScheduled = false; // Capture local references to native APIs, in case a polyfill overrides them.
+
+var localSetTimeout = typeof setTimeout === 'function' ? setTimeout : null;
+var localClearTimeout = typeof clearTimeout === 'function' ? clearTimeout : null;
+var localSetImmediate = typeof setImmediate !== 'undefined' ? setImmediate : null; // IE and Node.js + jsdom
+
+var isInputPending = typeof navigator !== 'undefined' && navigator.scheduling !== undefined && navigator.scheduling.isInputPending !== undefined ? navigator.scheduling.isInputPending.bind(navigator.scheduling) : null;
+
+function advanceTimers(currentTime) {
+  // Check for tasks that are no longer delayed and add them to the queue.
+  var timer = peek(timerQueue);
+
+  while (timer !== null) {
+    if (timer.callback === null) {
+      // Timer was cancelled.
+      pop(timerQueue);
+    } else if (timer.startTime <= currentTime) {
+      // Timer fired. Transfer to the task queue.
+      pop(timerQueue);
+      timer.sortIndex = timer.expirationTime;
+      push(taskQueue, timer);
+    } else {
+      // Remaining timers are pending.
+      return;
+    }
+
+    timer = peek(timerQueue);
+  }
+}
+
+function handleTimeout(currentTime) {
+  isHostTimeoutScheduled = false;
+  advanceTimers(currentTime);
+
+  if (!isHostCallbackScheduled) {
+    if (peek(taskQueue) !== null) {
+      isHostCallbackScheduled = true;
+      requestHostCallback(flushWork);
+    } else {
+      var firstTimer = peek(timerQueue);
+
+      if (firstTimer !== null) {
+        requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
+      }
+    }
+  }
+}
+
+function flushWork(hasTimeRemaining, initialTime) {
+
+
+  isHostCallbackScheduled = false;
+
+  if (isHostTimeoutScheduled) {
+    // We scheduled a timeout but it's no longer needed. Cancel it.
+    isHostTimeoutScheduled = false;
+    cancelHostTimeout();
+  }
+
+  isPerformingWork = true;
+  var previousPriorityLevel = currentPriorityLevel;
+
+  try {
+    if (enableProfiling) {
+      try {
+        return workLoop(hasTimeRemaining, initialTime);
+      } catch (error) {
+        if (currentTask !== null) {
+          var currentTime = exports.unstable_now();
+          markTaskErrored(currentTask, currentTime);
+          currentTask.isQueued = false;
+        }
+
+        throw error;
+      }
+    } else {
+      // No catch in prod code path.
+      return workLoop(hasTimeRemaining, initialTime);
+    }
+  } finally {
+    currentTask = null;
+    currentPriorityLevel = previousPriorityLevel;
+    isPerformingWork = false;
+  }
+}
+
+function workLoop(hasTimeRemaining, initialTime) {
+  var currentTime = initialTime;
+  advanceTimers(currentTime);
+  currentTask = peek(taskQueue);
+
+  while (currentTask !== null && !(enableSchedulerDebugging )) {
+    if (currentTask.expirationTime > currentTime && (!hasTimeRemaining || shouldYieldToHost())) {
+      // This currentTask hasn't expired, and we've reached the deadline.
+      break;
+    }
+
+    var callback = currentTask.callback;
+
+    if (typeof callback === 'function') {
+      currentTask.callback = null;
+      currentPriorityLevel = currentTask.priorityLevel;
+      var didUserCallbackTimeout = currentTask.expirationTime <= currentTime;
+
+      var continuationCallback = callback(didUserCallbackTimeout);
+      currentTime = exports.unstable_now();
+
+      if (typeof continuationCallback === 'function') {
+        currentTask.callback = continuationCallback;
+      } else {
+
+        if (currentTask === peek(taskQueue)) {
+          pop(taskQueue);
+        }
+      }
+
+      advanceTimers(currentTime);
+    } else {
+      pop(taskQueue);
+    }
+
+    currentTask = peek(taskQueue);
+  } // Return whether there's additional work
+
+
+  if (currentTask !== null) {
+    return true;
+  } else {
+    var firstTimer = peek(timerQueue);
+
+    if (firstTimer !== null) {
+      requestHostTimeout(handleTimeout, firstTimer.startTime - currentTime);
+    }
+
+    return false;
+  }
+}
+
+function unstable_runWithPriority(priorityLevel, eventHandler) {
+  switch (priorityLevel) {
+    case ImmediatePriority:
+    case UserBlockingPriority:
+    case NormalPriority:
+    case LowPriority:
+    case IdlePriority:
+      break;
+
+    default:
+      priorityLevel = NormalPriority;
+  }
+
+  var previousPriorityLevel = currentPriorityLevel;
+  currentPriorityLevel = priorityLevel;
+
+  try {
+    return eventHandler();
+  } finally {
+    currentPriorityLevel = previousPriorityLevel;
+  }
+}
+
+function unstable_next(eventHandler) {
+  var priorityLevel;
+
+  switch (currentPriorityLevel) {
+    case ImmediatePriority:
+    case UserBlockingPriority:
+    case NormalPriority:
+      // Shift down to normal priority
+      priorityLevel = NormalPriority;
+      break;
+
+    default:
+      // Anything lower than normal priority should remain at the current level.
+      priorityLevel = currentPriorityLevel;
+      break;
+  }
+
+  var previousPriorityLevel = currentPriorityLevel;
+  currentPriorityLevel = priorityLevel;
+
+  try {
+    return eventHandler();
+  } finally {
+    currentPriorityLevel = previousPriorityLevel;
+  }
+}
+
+function unstable_wrapCallback(callback) {
+  var parentPriorityLevel = currentPriorityLevel;
+  return function () {
+    // This is a fork of runWithPriority, inlined for performance.
+    var previousPriorityLevel = currentPriorityLevel;
+    currentPriorityLevel = parentPriorityLevel;
+
+    try {
+      return callback.apply(this, arguments);
+    } finally {
+      currentPriorityLevel = previousPriorityLevel;
+    }
+  };
+}
+
+function unstable_scheduleCallback(priorityLevel, callback, options) {
+  var currentTime = exports.unstable_now();
+  var startTime;
+
+  if (typeof options === 'object' && options !== null) {
+    var delay = options.delay;
+
+    if (typeof delay === 'number' && delay > 0) {
+      startTime = currentTime + delay;
+    } else {
+      startTime = currentTime;
+    }
+  } else {
+    startTime = currentTime;
+  }
+
+  var timeout;
+
+  switch (priorityLevel) {
+    case ImmediatePriority:
+      timeout = IMMEDIATE_PRIORITY_TIMEOUT;
+      break;
+
+    case UserBlockingPriority:
+      timeout = USER_BLOCKING_PRIORITY_TIMEOUT;
+      break;
+
+    case IdlePriority:
+      timeout = IDLE_PRIORITY_TIMEOUT;
+      break;
+
+    case LowPriority:
+      timeout = LOW_PRIORITY_TIMEOUT;
+      break;
+
+    case NormalPriority:
+    default:
+      timeout = NORMAL_PRIORITY_TIMEOUT;
+      break;
+  }
+
+  var expirationTime = startTime + timeout;
+  var newTask = {
+    id: taskIdCounter++,
+    callback: callback,
+    priorityLevel: priorityLevel,
+    startTime: startTime,
+    expirationTime: expirationTime,
+    sortIndex: -1
+  };
+
+  if (startTime > currentTime) {
+    // This is a delayed task.
+    newTask.sortIndex = startTime;
+    push(timerQueue, newTask);
+
+    if (peek(taskQueue) === null && newTask === peek(timerQueue)) {
+      // All tasks are delayed, and this is the task with the earliest delay.
+      if (isHostTimeoutScheduled) {
+        // Cancel an existing timeout.
+        cancelHostTimeout();
+      } else {
+        isHostTimeoutScheduled = true;
+      } // Schedule a timeout.
+
+
+      requestHostTimeout(handleTimeout, startTime - currentTime);
+    }
+  } else {
+    newTask.sortIndex = expirationTime;
+    push(taskQueue, newTask);
+    // wait until the next time we yield.
+
+
+    if (!isHostCallbackScheduled && !isPerformingWork) {
+      isHostCallbackScheduled = true;
+      requestHostCallback(flushWork);
+    }
+  }
+
+  return newTask;
+}
+
+function unstable_pauseExecution() {
+}
+
+function unstable_continueExecution() {
+
+  if (!isHostCallbackScheduled && !isPerformingWork) {
+    isHostCallbackScheduled = true;
+    requestHostCallback(flushWork);
+  }
+}
+
+function unstable_getFirstCallbackNode() {
+  return peek(taskQueue);
+}
+
+function unstable_cancelCallback(task) {
+  // remove from the queue because you can't remove arbitrary nodes from an
+  // array based heap, only the first one.)
+
+
+  task.callback = null;
+}
+
+function unstable_getCurrentPriorityLevel() {
+  return currentPriorityLevel;
+}
+
+var isMessageLoopRunning = false;
+var scheduledHostCallback = null;
+var taskTimeoutID = -1; // Scheduler periodically yields in case there is other work on the main
+// thread, like user events. By default, it yields multiple times per frame.
+// It does not attempt to align with frame boundaries, since most tasks don't
+// need to be frame aligned; for those that do, use requestAnimationFrame.
+
+var frameInterval = frameYieldMs;
+var startTime = -1;
+
+function shouldYieldToHost() {
+  var timeElapsed = exports.unstable_now() - startTime;
+
+  if (timeElapsed < frameInterval) {
+    // The main thread has only been blocked for a really short amount of time;
+    // smaller than a single frame. Don't yield yet.
+    return false;
+  } // The main thread has been blocked for a non-negligible amount of time. We
+
+
+  return true;
+}
+
+function requestPaint() {
+
+}
+
+function forceFrameRate(fps) {
+  if (fps < 0 || fps > 125) {
+    // Using console['error'] to evade Babel and ESLint
+    console['error']('forceFrameRate takes a positive int between 0 and 125, ' + 'forcing frame rates higher than 125 fps is not supported');
+    return;
+  }
+
+  if (fps > 0) {
+    frameInterval = Math.floor(1000 / fps);
+  } else {
+    // reset the framerate
+    frameInterval = frameYieldMs;
+  }
+}
+
+var performWorkUntilDeadline = function () {
+  if (scheduledHostCallback !== null) {
+    var currentTime = exports.unstable_now(); // Keep track of the start time so we can measure how long the main thread
+    // has been blocked.
+
+    startTime = currentTime;
+    var hasTimeRemaining = true; // If a scheduler task throws, exit the current browser task so the
+    // error can be observed.
+    //
+    // Intentionally not using a try-catch, since that makes some debugging
+    // techniques harder. Instead, if `scheduledHostCallback` errors, then
+    // `hasMoreWork` will remain true, and we'll continue the work loop.
+
+    var hasMoreWork = true;
+
+    try {
+      hasMoreWork = scheduledHostCallback(hasTimeRemaining, currentTime);
+    } finally {
+      if (hasMoreWork) {
+        // If there's more work, schedule the next message event at the end
+        // of the preceding one.
+        schedulePerformWorkUntilDeadline();
+      } else {
+        isMessageLoopRunning = false;
+        scheduledHostCallback = null;
+      }
+    }
+  } else {
+    isMessageLoopRunning = false;
+  } // Yielding to the browser will give it a chance to paint, so we can
+};
+
+var schedulePerformWorkUntilDeadline;
+
+if (typeof localSetImmediate === 'function') {
+  // Node.js and old IE.
+  // There's a few reasons for why we prefer setImmediate.
+  //
+  // Unlike MessageChannel, it doesn't prevent a Node.js process from exiting.
+  // (Even though this is a DOM fork of the Scheduler, you could get here
+  // with a mix of Node.js 15+, which has a MessageChannel, and jsdom.)
+  // https://github.com/facebook/react/issues/20756
+  //
+  // But also, it runs earlier which is the semantic we want.
+  // If other browsers ever implement it, it's better to use it.
+  // Although both of these would be inferior to native scheduling.
+  schedulePerformWorkUntilDeadline = function () {
+    localSetImmediate(performWorkUntilDeadline);
+  };
+} else if (typeof MessageChannel !== 'undefined') {
+  // DOM and Worker environments.
+  // We prefer MessageChannel because of the 4ms setTimeout clamping.
+  var channel = new MessageChannel();
+  var port = channel.port2;
+  channel.port1.onmessage = performWorkUntilDeadline;
+
+  schedulePerformWorkUntilDeadline = function () {
+    port.postMessage(null);
+  };
+} else {
+  // We should only fallback here in non-browser environments.
+  schedulePerformWorkUntilDeadline = function () {
+    localSetTimeout(performWorkUntilDeadline, 0);
+  };
+}
+
+function requestHostCallback(callback) {
+  scheduledHostCallback = callback;
+
+  if (!isMessageLoopRunning) {
+    isMessageLoopRunning = true;
+    schedulePerformWorkUntilDeadline();
+  }
+}
+
+function requestHostTimeout(callback, ms) {
+  taskTimeoutID = localSetTimeout(function () {
+    callback(exports.unstable_now());
+  }, ms);
+}
+
+function cancelHostTimeout() {
+  localClearTimeout(taskTimeoutID);
+  taskTimeoutID = -1;
+}
+
+var unstable_requestPaint = requestPaint;
+var unstable_Profiling =  null;
+
+exports.unstable_IdlePriority = IdlePriority;
+exports.unstable_ImmediatePriority = ImmediatePriority;
+exports.unstable_LowPriority = LowPriority;
+exports.unstable_NormalPriority = NormalPriority;
+exports.unstable_Profiling = unstable_Profiling;
+exports.unstable_UserBlockingPriority = UserBlockingPriority;
+exports.unstable_cancelCallback = unstable_cancelCallback;
+exports.unstable_continueExecution = unstable_continueExecution;
+exports.unstable_forceFrameRate = forceFrameRate;
+exports.unstable_getCurrentPriorityLevel = unstable_getCurrentPriorityLevel;
+exports.unstable_getFirstCallbackNode = unstable_getFirstCallbackNode;
+exports.unstable_next = unstable_next;
+exports.unstable_pauseExecution = unstable_pauseExecution;
+exports.unstable_requestPaint = unstable_requestPaint;
+exports.unstable_runWithPriority = unstable_runWithPriority;
+exports.unstable_scheduleCallback = unstable_scheduleCallback;
+exports.unstable_shouldYield = shouldYieldToHost;
+exports.unstable_wrapCallback = unstable_wrapCallback;
+          /* global __REACT_DEVTOOLS_GLOBAL_HOOK__ */
+if (
+  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ !== 'undefined' &&
+  typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop ===
+    'function'
+) {
+  __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop(new Error());
+}
+        
+  })();
+}
+
+
+/***/ },
+
+/***/ "./node_modules/scheduler/index.js"
+/*!*****************************************!*\
+  !*** ./node_modules/scheduler/index.js ***!
+  \*****************************************/
+(module, __unused_webpack_exports, __webpack_require__) {
+
+
+
+if (false) // removed by dead control flow
+{} else {
+  module.exports = __webpack_require__(/*! ./cjs/scheduler.development.js */ "./node_modules/scheduler/cjs/scheduler.development.js");
+}
+
+
+/***/ },
+
 /***/ "./src/webview/App.tsx"
 /*!*****************************!*\
   !*** ./src/webview/App.tsx ***!
@@ -36211,10 +33444,39 @@ __webpack_require__.r(__webpack_exports__);
 
 
 const vscode = acquireVsCodeApi();
+const minMapZoom = 0.55;
+const maxMapZoom = 1.85;
+const mapZoomStep = 0.15;
+const clampMapZoom = (value) => Math.max(minMapZoom, Math.min(maxMapZoom, Math.round(value * 100) / 100));
+const isRecord = (value) => typeof value === "object" && value !== null;
+const isLynvoView = (value) => value === "board" ||
+    value === "table" ||
+    value === "activity" ||
+    value === "conflicts" ||
+    value === "insights" ||
+    value === "labels";
+const parseInboundMessage = (value) => {
+    if (!isRecord(value)) {
+        return null;
+    }
+    if (value.command === "loadData") {
+        return { command: "loadData", data: value.data || null };
+    }
+    if (value.command === "switchView" && isLynvoView(value.view)) {
+        return { command: "switchView", view: value.view };
+    }
+    return null;
+};
 const priorityColors = {
     low: "#3fb950",
     medium: "#d29922",
     high: "#f85149",
+};
+const relationLabels = {
+    blocks: "Blocks",
+    "blocked-by": "Blocked by",
+    related: "Related",
+    duplicates: "Duplicates",
 };
 const formatDateTime = (timestamp) => {
     const date = new Date(timestamp);
@@ -36224,8 +33486,9 @@ const formatDateTime = (timestamp) => {
     })}`;
 };
 const toDateInputValue = (timestamp) => {
-    if (!timestamp)
+    if (!timestamp) {
         return "";
+    }
     const dt = new Date(timestamp);
     const year = dt.getFullYear();
     const month = `${dt.getMonth() + 1}`.padStart(2, "0");
@@ -36233,18 +33496,652 @@ const toDateInputValue = (timestamp) => {
     return `${year}-${month}-${day}`;
 };
 const fromDateInputValue = (value) => {
-    if (!value)
+    if (!value) {
         return undefined;
+    }
     const ts = new Date(`${value}T23:59:59`).getTime();
     return Number.isFinite(ts) ? ts : undefined;
 };
 const getTaskPriority = (task) => task.priority || "medium";
+const getReadableTextColor = (hexColor) => {
+    const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hexColor);
+    if (!match) {
+        return "var(--vscode-foreground)";
+    }
+    const red = parseInt(match[1], 16);
+    const green = parseInt(match[2], 16);
+    const blue = parseInt(match[3], 16);
+    const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255;
+    return luminance > 0.58 ? "#0d1117" : "#ffffff";
+};
+const getDueState = (task) => {
+    if (!task.dueDate) {
+        return "none";
+    }
+    const now = Date.now();
+    if (task.dueDate < now) {
+        return "overdue";
+    }
+    return task.dueDate - now < 1000 * 60 * 60 * 24 * 3 ? "soon" : "future";
+};
+const hashTaskId = (taskId) => taskId.split("").reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) % 100000, 17);
+const getDefaultMapPosition = (task, taskIndex, columns, mapWidth, mapHeight) => {
+    const hash = hashTaskId(task.id);
+    const columnIndex = Math.max(0, columns.findIndex((column) => column.id === task.status));
+    const columnRatio = columns.length <= 1 ? 0.5 : columnIndex / Math.max(columns.length - 1, 1);
+    const wave = Math.sin((hash % 360) * (Math.PI / 180));
+    const ring = 90 + (hash % 260);
+    const x = 160 + columnRatio * (mapWidth - 320) + wave * 80;
+    const y = mapHeight / 2 + Math.cos(taskIndex * 1.8 + hash) * ring;
+    return {
+        x: Math.max(90, Math.min(mapWidth - 90, x)),
+        y: Math.max(90, Math.min(mapHeight - 90, y)),
+    };
+};
+const sanitizeMarkdownHref = (href) => {
+    try {
+        const parsed = new URL(href);
+        return ["http:", "https:", "mailto:"].includes(parsed.protocol) ? href : null;
+    }
+    catch {
+        return href.startsWith("#") ? href : null;
+    }
+};
+const renderInlineText = (text) => {
+    const parts = text.split(/(`[^`]+`|\[[^\]]+\]\([^)]+\))/g);
+    return parts.map((part, index) => {
+        if (part.startsWith("`") && part.endsWith("`")) {
+            return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("code", { key: index, style: { background: "var(--vscode-textCodeBlock-background)", padding: "1px 4px", borderRadius: "3px" } }, part.slice(1, -1)));
+        }
+        const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+        if (linkMatch) {
+            const safeHref = sanitizeMarkdownHref(linkMatch[2]);
+            if (!safeHref) {
+                return react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, { key: index }, linkMatch[1]);
+            }
+            return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("a", { key: index, href: safeHref, rel: "noreferrer", style: { color: "var(--vscode-textLink-foreground)" } }, linkMatch[1]));
+        }
+        return react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, { key: index }, part);
+    });
+};
+const renderRichText = (text) => {
+    const lines = text.split("\n");
+    const blocks = [];
+    let codeLines = [];
+    let inCode = false;
+    lines.forEach((line, index) => {
+        if (line.trim().startsWith("```")) {
+            if (inCode) {
+                blocks.push(react__WEBPACK_IMPORTED_MODULE_0__.createElement("pre", { key: `code-${index}`, style: { overflowX: "auto", background: "var(--vscode-textCodeBlock-background)", padding: "8px", borderRadius: "4px", fontSize: "11px" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("code", null, codeLines.join("\n"))));
+                codeLines = [];
+            }
+            inCode = !inCode;
+            return;
+        }
+        if (inCode) {
+            codeLines.push(line);
+            return;
+        }
+        const checklistMatch = line.match(/^\s*-\s+\[( |x)\]\s+(.+)$/i);
+        if (checklistMatch) {
+            blocks.push(react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: index, style: { display: "flex", gap: "6px", alignItems: "center" } },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { type: "checkbox", checked: checklistMatch[1].toLowerCase() === "x", readOnly: true }),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, renderInlineText(checklistMatch[2]))));
+            return;
+        }
+        const listMatch = line.match(/^\s*-\s+(.+)$/);
+        if (listMatch) {
+            blocks.push(react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: index, style: { paddingLeft: "10px" } },
+                "\u2022 ",
+                renderInlineText(listMatch[1])));
+            return;
+        }
+        if (line.startsWith(">")) {
+            blocks.push(react__WEBPACK_IMPORTED_MODULE_0__.createElement("blockquote", { key: index, style: { margin: "4px 0", paddingLeft: "8px", borderLeft: "2px solid var(--vscode-widget-border)", color: "var(--vscode-descriptionForeground)" } }, renderInlineText(line.replace(/^>\s?/, ""))));
+            return;
+        }
+        blocks.push(react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: index }, line.trim() ? renderInlineText(line) : react__WEBPACK_IMPORTED_MODULE_0__.createElement("br", null)));
+    });
+    if (codeLines.length > 0) {
+        blocks.push(react__WEBPACK_IMPORTED_MODULE_0__.createElement("pre", { key: "code-tail", style: { overflowX: "auto", background: "var(--vscode-textCodeBlock-background)", padding: "8px", borderRadius: "4px", fontSize: "11px" } },
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("code", null, codeLines.join("\n"))));
+    }
+    return blocks;
+};
+const formatConflictValue = (value) => value === null || value === undefined || value === "" ? "Empty" : String(value);
+const renderConflictDiff = (localValue, remoteValue) => {
+    const localText = formatConflictValue(localValue);
+    const remoteText = formatConflictValue(remoteValue);
+    const localLines = localText.split("\n");
+    const remoteLines = remoteText.split("\n");
+    const lineCount = Math.max(localLines.length, remoteLines.length);
+    if (lineCount <= 1 && localText.length < 90 && remoteText.length < 90) {
+        return null;
+    }
+    return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { border: "1px solid var(--vscode-widget-border)", borderRadius: "6px", overflow: "hidden", marginBottom: "10px" } }, Array.from({ length: lineCount }).map((_, index) => {
+        const localLine = localLines[index] ?? "";
+        const remoteLine = remoteLines[index] ?? "";
+        const changed = localLine !== remoteLine;
+        if (!changed) {
+            return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: index, style: { display: "grid", gridTemplateColumns: "1fr 1fr", fontSize: "11px", color: "var(--vscode-descriptionForeground)" } },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: "4px 8px", borderRight: "1px solid var(--vscode-widget-border)" } }, localLine || " "),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: "4px 8px" } }, remoteLine || " ")));
+        }
+        return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: index, style: { display: "grid", gridTemplateColumns: "1fr 1fr", fontSize: "11px" } },
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: "4px 8px", borderRight: "1px solid var(--vscode-widget-border)", backgroundColor: "rgba(248, 81, 73, 0.14)" } }, localLine || " "),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: "4px 8px", backgroundColor: "rgba(63, 185, 80, 0.14)" } }, remoteLine || " ")));
+    })));
+};
+const lynvoStyles = `
+  :root {
+    color-scheme: light dark;
+    --lynvo-border: var(--vscode-widget-border, #3d444d);
+    --lynvo-panel: var(--vscode-sideBar-background, #161b22);
+    --lynvo-panel-strong: var(--vscode-editorWidget-background, #1f242c);
+    --lynvo-card-bg: var(--vscode-editor-background, #0d1117);
+    --lynvo-hover: var(--vscode-list-hoverBackground, #1f2937);
+    --lynvo-radius: 8px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    color: var(--vscode-foreground, #e6edf3);
+    background: var(--vscode-editor-background, #0d1117);
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+  }
+
+  button, input, select, textarea {
+    font: inherit;
+  }
+
+  button {
+    min-height: 28px;
+    border-radius: 6px;
+    border: 1px solid var(--lynvo-border);
+    background: var(--vscode-button-secondaryBackground, #30363d);
+    color: var(--vscode-button-secondaryForeground, #f0f6fc);
+    cursor: pointer;
+  }
+
+  button:hover:not(:disabled) {
+    background: var(--vscode-button-secondaryHoverBackground, #3d444d);
+  }
+
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
+  input, select, textarea {
+    border-radius: 6px;
+    border: 1px solid var(--vscode-input-border, var(--lynvo-border));
+    background: var(--vscode-input-background);
+    color: var(--vscode-input-foreground);
+    outline: none;
+  }
+
+  input:focus, select:focus, textarea:focus, button:focus-visible {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: 1px;
+  }
+
+  .lynvo-shell {
+    height: 100vh;
+    display: grid;
+    grid-template-rows: auto auto 1fr;
+    gap: 12px;
+    padding: 16px;
+    overflow: hidden;
+  }
+
+  .lynvo-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+  }
+
+  .lynvo-stat {
+    background: var(--lynvo-panel-strong);
+    border: 1px solid var(--lynvo-border);
+    border-radius: var(--lynvo-radius);
+    padding: 10px 12px;
+  }
+
+  .lynvo-stat-label {
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+    margin-bottom: 4px;
+  }
+
+  .lynvo-stat-value {
+    font-size: 21px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .lynvo-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    border-bottom: 1px solid var(--lynvo-border);
+    padding-bottom: 10px;
+  }
+
+  .lynvo-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .lynvo-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 6px;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: 0;
+    color: var(--vscode-foreground);
+  }
+
+  .lynvo-brand-mark {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--vscode-foreground, #f0f6fc);
+    display: inline-grid;
+    place-items: center;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .lynvo-brand-mark::before {
+    content: "";
+    width: 3px;
+    height: 12px;
+    border-radius: 2px;
+    background: #58a6ff;
+    box-shadow: 6px -3px 0 #3fb950, 12px 2px 0 #d29922;
+  }
+
+  .lynvo-tab {
+    padding: 5px 10px;
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .lynvo-tab.active {
+    background: var(--vscode-button-background);
+    border-color: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+  }
+
+  .lynvo-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .lynvo-filters {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .lynvo-search {
+    width: 220px;
+    padding: 6px 8px;
+  }
+
+  .lynvo-board {
+    display: flex;
+    gap: 12px;
+    min-height: 0;
+    overflow-x: auto;
+    align-items: stretch;
+    padding-bottom: 10px;
+  }
+
+  .lynvo-column {
+    flex: 0 0 320px;
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    background: var(--lynvo-panel);
+    border: 1px solid var(--lynvo-border);
+    border-radius: var(--lynvo-radius);
+    padding: 12px;
+    scrollbar-color: var(--vscode-scrollbarSlider-background, #30363d) transparent;
+  }
+
+  .lynvo-column-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    position: sticky;
+    top: -12px;
+    z-index: 5;
+    padding: 12px 0 10px;
+    background: var(--lynvo-panel);
+    border-bottom: 1px solid var(--lynvo-border);
+    box-shadow: 0 8px 12px -10px rgba(0, 0, 0, 0.75);
+  }
+
+  .lynvo-column-title {
+    min-width: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0;
+  }
+
+  .lynvo-count {
+    color: var(--vscode-descriptionForeground);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .lynvo-card {
+    background: var(--lynvo-card-bg);
+    border: 1px solid var(--lynvo-border);
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: var(--lynvo-radius);
+    position: relative;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.18);
+    transition: border-color 120ms ease, transform 120ms ease, background 120ms ease;
+  }
+
+  .lynvo-card:hover {
+    border-color: var(--vscode-focusBorder);
+    transform: translateY(-1px);
+  }
+
+  .icon-btn {
+    width: 26px;
+    min-width: 26px;
+    min-height: 26px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .icon-btn.delete:hover {
+    border-color: #f85149;
+    color: #f85149;
+  }
+
+  .lynvo-table-shell {
+    flex: 1;
+    min-height: 0;
+    display: grid;
+    grid-template-rows: auto 1fr;
+    gap: 10px;
+  }
+
+  .lynvo-view-switcher {
+    display: inline-flex;
+    width: max-content;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--lynvo-border);
+    border-radius: var(--lynvo-radius);
+    background: var(--lynvo-panel);
+  }
+
+  .lynvo-view-switcher button {
+    min-height: 26px;
+    padding: 4px 10px;
+    border: 0;
+    background: transparent;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .lynvo-view-switcher button.active {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+  }
+
+  .lynvo-map-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .lynvo-map-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px;
+    border: 1px solid var(--lynvo-border);
+    border-radius: var(--lynvo-radius);
+    background: var(--lynvo-panel);
+  }
+
+  .lynvo-map-controls button {
+    min-width: 30px;
+    min-height: 26px;
+    padding: 0 8px;
+  }
+
+  .lynvo-map-zoom-value {
+    min-width: 48px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .lynvo-map-layout {
+    min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 10px;
+  }
+
+  .lynvo-task-map {
+    position: relative;
+    min-height: 520px;
+    overflow: hidden;
+    cursor: grab;
+    user-select: none;
+    border: 1px solid var(--lynvo-border);
+    border-radius: var(--lynvo-radius);
+    background:
+      radial-gradient(circle at center, rgba(88, 166, 255, 0.12), transparent 34%),
+      radial-gradient(circle at 70% 28%, rgba(63, 185, 80, 0.08), transparent 24%),
+      radial-gradient(circle at 28% 72%, rgba(210, 153, 34, 0.08), transparent 22%),
+      var(--lynvo-panel);
+  }
+
+  .lynvo-task-map.panning {
+    cursor: grabbing;
+  }
+
+  .lynvo-task-map:focus {
+    outline: 1px solid var(--vscode-focusBorder);
+    outline-offset: -1px;
+  }
+
+  .lynvo-task-map-zoom-surface {
+    position: absolute;
+    inset: 0;
+    min-width: 100%;
+    min-height: 100%;
+  }
+
+  .lynvo-task-map-canvas {
+    position: relative;
+    min-width: 100%;
+    min-height: 100%;
+    transform-origin: 0 0;
+    transition: transform 120ms ease;
+  }
+
+  .lynvo-task-map-canvas svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+
+  .lynvo-map-node {
+    position: absolute;
+    width: 118px;
+    height: 118px;
+    min-height: 118px;
+    padding: 14px;
+    border-radius: 999px;
+    transform: translate(-50%, -50%);
+    display: grid;
+    place-items: center;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.25;
+    word-break: break-word;
+    overflow: hidden;
+    cursor: grab;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 18px 36px rgba(0, 0, 0, 0.28);
+    transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+    touch-action: none;
+  }
+
+  .lynvo-map-node:hover,
+  .lynvo-map-node.selected {
+    transform: translate(-50%, -50%) scale(1.05);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 20px 42px rgba(0, 0, 0, 0.38);
+  }
+
+  .lynvo-map-node:active {
+    cursor: grabbing;
+  }
+
+  .lynvo-map-node.link-source {
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 5px;
+  }
+
+  .lynvo-map-node.overdue {
+    opacity: 0.68;
+    box-shadow: 0 0 0 4px rgba(248, 81, 73, 0.22), 0 10px 24px rgba(0, 0, 0, 0.28);
+  }
+
+  .lynvo-map-node.soon {
+    opacity: 0.86;
+    box-shadow: 0 0 0 4px rgba(210, 153, 34, 0.22), 0 10px 24px rgba(0, 0, 0, 0.28);
+  }
+
+  .lynvo-map-node small {
+    display: block;
+    margin-top: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    opacity: 0.9;
+  }
+
+  .lynvo-map-empty {
+    height: 100%;
+    min-height: 320px;
+    display: grid;
+    place-items: center;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .lynvo-map-panel {
+    min-height: 0;
+    overflow: auto;
+    border: 1px solid var(--lynvo-border);
+    border-radius: var(--lynvo-radius);
+    background: var(--lynvo-panel);
+    padding: 12px;
+  }
+
+  .lynvo-map-panel h3 {
+    margin: 0 0 6px;
+    font-size: 14px;
+  }
+
+  .lynvo-relation-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 0;
+    border-top: 1px solid var(--lynvo-border);
+  }
+
+  .lynvo-relation-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    font-size: 11px;
+  }
+
+  .lynvo-danger-button {
+    color: #f85149;
+    border-color: rgba(248, 81, 73, 0.45);
+  }
+
+  @media (max-width: 820px) {
+    .lynvo-shell {
+      padding: 10px;
+    }
+
+    .lynvo-toolbar {
+      grid-template-columns: 1fr;
+    }
+
+    .lynvo-actions {
+      justify-content: flex-start;
+    }
+
+    .lynvo-search {
+      width: min(100%, 260px);
+    }
+
+    .lynvo-map-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+`;
 const App = () => {
     const [boardData, setBoardData] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
     const [activeView, setActiveView] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)("board");
+    const [tableMode, setTableMode] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)("rows");
+    const [mapLinkSourceId, setMapLinkSourceId] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+    const [selectedMapTaskId, setSelectedMapTaskId] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
+    const [isMapLinkMode, setIsMapLinkMode] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+    const [mapNodePositions, setMapNodePositions] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)({});
+    const [mapZoom, setMapZoom] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(1);
+    const [isMapPanning, setIsMapPanning] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
+    const [mapPanOffset, setMapPanOffset] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)({ x: 0, y: 0 });
     const [searchTerm, setSearchTerm] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)("");
     const [activeFilterLabel, setActiveFilterLabel] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)("");
     const [activePriorityFilter, setActivePriorityFilter] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)("");
+    const [activityTypeFilter, setActivityTypeFilter] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)("");
+    const [activityUserFilter, setActivityUserFilter] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)("");
     const [isSyncing, setIsSyncing] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(false);
     const [addingTaskColId, setAddingTaskColId] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)(null);
     const [newTaskTitle, setNewTaskTitle] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)("");
@@ -36266,30 +34163,117 @@ const App = () => {
     const [editColColor, setEditColColor] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)("");
     const [newLabelName, setNewLabelName] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)("");
     const [newLabelColor, setNewLabelColor] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)("#f85149");
+    const [checklistDrafts, setChecklistDrafts] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)({});
+    const [relationTargetByTask, setRelationTargetByTask] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)({});
+    const [relationTypeByTask, setRelationTypeByTask] = (0,react__WEBPACK_IMPORTED_MODULE_0__.useState)({});
     const draggedTaskRef = (0,react__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
     const draggedFromColumnRef = (0,react__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
     const dragOverTaskRef = (0,react__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+    const mapCanvasRef = (0,react__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+    const mapViewportRef = (0,react__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+    const mapDragRef = (0,react__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+    const mapPanRef = (0,react__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
+    const suppressMapClickRef = (0,react__WEBPACK_IMPORTED_MODULE_0__.useRef)(null);
     const isFiltering = searchTerm.trim().length > 0 ||
         activeFilterLabel !== "" ||
         activePriorityFilter !== "";
     (0,react__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
         const handleMessage = (event) => {
-            if (event.data.command === "loadData") {
-                setBoardData(event.data.data);
+            const message = parseInboundMessage(event.data);
+            if (!message) {
+                return;
+            }
+            if (message.command === "loadData") {
+                setBoardData(message.data);
                 setIsSyncing(false);
             }
-            if (event.data.command === "switchView" && event.data.view) {
-                setActiveView(event.data.view);
+            if (message.command === "switchView") {
+                setActiveView(message.view);
             }
         };
         window.addEventListener("message", handleMessage);
         vscode.postMessage({ command: "requestData" });
         return () => window.removeEventListener("message", handleMessage);
     }, []);
+    (0,react__WEBPACK_IMPORTED_MODULE_0__.useEffect)(() => {
+        const handlePointerMove = (event) => {
+            const pan = mapPanRef.current;
+            if (pan) {
+                setMapPanOffset({
+                    x: pan.startOffsetX + event.clientX - pan.startX,
+                    y: pan.startOffsetY + event.clientY - pan.startY,
+                });
+                return;
+            }
+            const drag = mapDragRef.current;
+            const canvas = mapCanvasRef.current;
+            if (!drag || !canvas) {
+                return;
+            }
+            const rect = canvas.getBoundingClientRect();
+            const pointerX = (event.clientX - rect.left) / mapZoom;
+            const pointerY = (event.clientY - rect.top) / mapZoom;
+            const nextX = Math.max(70, Math.min(canvas.offsetWidth - 70, pointerX - drag.offsetX));
+            const nextY = Math.max(70, Math.min(canvas.offsetHeight - 70, pointerY - drag.offsetY));
+            drag.moved = true;
+            setMapNodePositions((positions) => ({
+                ...positions,
+                [drag.taskId]: { x: nextX, y: nextY },
+            }));
+        };
+        const handlePointerUp = () => {
+            mapPanRef.current = null;
+            setIsMapPanning(false);
+            const drag = mapDragRef.current;
+            if (drag?.moved) {
+                suppressMapClickRef.current = drag.taskId;
+                window.setTimeout(() => {
+                    if (suppressMapClickRef.current === drag.taskId) {
+                        suppressMapClickRef.current = null;
+                    }
+                }, 0);
+            }
+            mapDragRef.current = null;
+        };
+        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointerup", handlePointerUp);
+        return () => {
+            window.removeEventListener("pointermove", handlePointerMove);
+            window.removeEventListener("pointerup", handlePointerUp);
+        };
+    }, [mapZoom]);
     const sortedColumns = (0,react__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => boardData
         ? Object.values(boardData.columns).sort((a, b) => a.position - b.position)
         : [], [boardData]);
     const tasks = (0,react__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => Object.values(boardData?.tasks || {}), [boardData]);
+    const filteredTasks = (0,react__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => tasks
+        .filter((task) => !searchTerm ||
+        task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        task.description.toLowerCase().includes(searchTerm.toLowerCase()))
+        .filter((task) => !activeFilterLabel ||
+        (task.labelIds && task.labelIds.includes(activeFilterLabel)))
+        .filter((task) => !activePriorityFilter || getTaskPriority(task) === activePriorityFilter), [activeFilterLabel, activePriorityFilter, searchTerm, tasks]);
+    const activityItems = (0,react__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => Object.values(boardData?.activity || {}).sort((a, b) => b.createdAt - a.createdAt), [boardData]);
+    const activityTypes = (0,react__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => Array.from(new Set(activityItems.map((item) => item.type))).sort(), [activityItems]);
+    const activityUsers = (0,react__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => Array.from(new Set(activityItems.map((item) => item.actor.username))).sort((a, b) => a.localeCompare(b)), [activityItems]);
+    const filteredActivityItems = (0,react__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => activityItems
+        .filter((item) => !activityTypeFilter || item.type === activityTypeFilter)
+        .filter((item) => !activityUserFilter || item.actor.username === activityUserFilter), [activityItems, activityTypeFilter, activityUserFilter]);
+    const unresolvedConflicts = (0,react__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => Object.values(boardData?.conflicts || {})
+        .filter((conflict) => !conflict.resolved)
+        .sort((a, b) => b.createdAt - a.createdAt), [boardData]);
+    const syncStatus = boardData?.sync?.status || "idle";
+    const syncColor = syncStatus === "synced"
+        ? "#3fb950"
+        : syncStatus === "failed" || syncStatus === "offline" || syncStatus === "conflict"
+            ? "#f85149"
+            : "#d29922";
+    const activeUsers = (0,react__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => {
+        const cutoff = Date.now() - 1000 * 60 * 5;
+        return Object.values(boardData?.users || {})
+            .filter((user) => user.lastSeenAt >= cutoff)
+            .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
+    }, [boardData]);
     const metrics = (0,react__WEBPACK_IMPORTED_MODULE_0__.useMemo)(() => {
         const now = Date.now();
         const doneIds = sortedColumns
@@ -36328,13 +34312,15 @@ const App = () => {
         .sort((a, b) => (a.position ?? a.createdAt) - (b.position ?? b.createdAt));
     const handleDrop = (e, newStatus) => {
         e.preventDefault();
-        if (isFiltering || !boardData)
+        if (isFiltering || !boardData) {
             return;
+        }
         const taskId = draggedTaskRef.current;
         const sourceStatus = draggedFromColumnRef.current;
         const targetId = dragOverTaskRef.current;
-        if (!taskId || !sourceStatus || !boardData.tasks[taskId])
+        if (!taskId || !sourceStatus || !boardData.tasks[taskId]) {
             return;
+        }
         const nextBoard = {
             ...boardData,
             tasks: { ...boardData.tasks },
@@ -36367,6 +34353,17 @@ const App = () => {
                     position: idx,
                 }))),
         ];
+        updates.forEach((update) => {
+            const task = nextBoard.tasks[update.id];
+            if (!task) {
+                return;
+            }
+            nextBoard.tasks[update.id] = {
+                ...task,
+                status: update.status,
+                position: update.position,
+            };
+        });
         setBoardData(nextBoard);
         vscode.postMessage({ command: "reorderTasks", updates });
         draggedTaskRef.current = null;
@@ -36382,8 +34379,9 @@ const App = () => {
         setNewTaskDueDate("");
     };
     const submitNewTask = () => {
-        if (!newTaskTitle.trim() || !addingTaskColId)
+        if (!newTaskTitle.trim() || !addingTaskColId) {
             return;
+        }
         vscode.postMessage({
             command: "createTask",
             title: newTaskTitle.trim(),
@@ -36404,8 +34402,9 @@ const App = () => {
         setEditDueDate(toDateInputValue(task.dueDate));
     };
     const saveEditTask = () => {
-        if (!editTitle.trim() || !editingTaskId)
+        if (!editTitle.trim() || !editingTaskId) {
             return;
+        }
         vscode.postMessage({
             command: "editTask",
             taskId: editingTaskId,
@@ -36417,15 +34416,147 @@ const App = () => {
         });
         setEditingTaskId(null);
     };
+    const getChecklistProgress = (task) => {
+        const checklist = task.checklist || [];
+        const done = checklist.filter((item) => item.done).length;
+        return { done, total: checklist.length };
+    };
+    const addChecklistItem = (taskId) => {
+        const text = checklistDrafts[taskId]?.trim();
+        if (!text) {
+            return;
+        }
+        vscode.postMessage({ command: "addChecklistItem", taskId, text });
+        setChecklistDrafts({ ...checklistDrafts, [taskId]: "" });
+    };
+    const addTaskRelation = (taskId) => {
+        const targetTaskId = relationTargetByTask[taskId];
+        const relationType = relationTypeByTask[taskId] || "related";
+        if (!targetTaskId || targetTaskId === taskId) {
+            return;
+        }
+        createTaskRelation(taskId, targetTaskId, relationType);
+        setRelationTargetByTask({ ...relationTargetByTask, [taskId]: "" });
+    };
+    const deleteTaskRelation = (taskId, relationId) => {
+        if (!boardData) {
+            return;
+        }
+        const task = boardData.tasks[taskId];
+        if (!task) {
+            return;
+        }
+        setBoardData({
+            ...boardData,
+            tasks: {
+                ...boardData.tasks,
+                [taskId]: {
+                    ...task,
+                    relations: (task.relations || []).filter((relation) => relation.id !== relationId),
+                },
+            },
+        });
+        vscode.postMessage({
+            command: "deleteTaskRelation",
+            taskId,
+            relationId,
+        });
+    };
+    const createTaskRelation = (taskId, targetTaskId, relationType) => {
+        if (!boardData || taskId === targetTaskId) {
+            return;
+        }
+        const sourceTask = boardData.tasks[taskId];
+        const targetTask = boardData.tasks[targetTaskId];
+        if (!sourceTask || !targetTask) {
+            return;
+        }
+        const exists = (sourceTask.relations || []).some((relation) => relation.targetTaskId === targetTaskId && relation.type === relationType);
+        if (exists) {
+            return;
+        }
+        vscode.postMessage({
+            command: "addTaskRelation",
+            taskId,
+            targetTaskId,
+            relationType,
+        });
+    };
+    const handleMapTaskClick = (taskId) => {
+        if (suppressMapClickRef.current === taskId) {
+            suppressMapClickRef.current = null;
+            return;
+        }
+        setSelectedMapTaskId(taskId);
+        if (!isMapLinkMode) {
+            return;
+        }
+        if (!mapLinkSourceId) {
+            setMapLinkSourceId(taskId);
+            return;
+        }
+        if (mapLinkSourceId === taskId) {
+            setMapLinkSourceId(null);
+            return;
+        }
+        createTaskRelation(mapLinkSourceId, taskId, relationTypeByTask[mapLinkSourceId] || "related");
+        setMapLinkSourceId(null);
+        setIsMapLinkMode(false);
+    };
+    const updateMapZoom = (nextZoom) => {
+        setMapZoom(clampMapZoom(nextZoom));
+    };
+    const handleMapWheel = (event) => {
+        if (!event.ctrlKey && !event.metaKey) {
+            return;
+        }
+        event.preventDefault();
+        const direction = event.deltaY > 0 ? -1 : 1;
+        updateMapZoom(mapZoom + direction * mapZoomStep);
+    };
+    const handleMapKeyDown = (event) => {
+        if (event.key === "+" || event.key === "=") {
+            event.preventDefault();
+            updateMapZoom(mapZoom + mapZoomStep);
+        }
+        if (event.key === "-" || event.key === "_") {
+            event.preventDefault();
+            updateMapZoom(mapZoom - mapZoomStep);
+        }
+        if (event.key === "0") {
+            event.preventDefault();
+            updateMapZoom(1);
+        }
+    };
+    const handleMapBackgroundPointerDown = (event) => {
+        const target = event.target;
+        if (event.button !== 0 ||
+            !(target instanceof Element) ||
+            target.closest(".lynvo-map-node")) {
+            return;
+        }
+        mapPanRef.current = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            startOffsetX: mapPanOffset.x,
+            startOffsetY: mapPanOffset.y,
+        };
+        setIsMapPanning(true);
+        event.currentTarget.setPointerCapture(event.pointerId);
+    };
     const toggleLabelSelection = (labelId, current, setter) => {
-        if (current.includes(labelId))
+        if (current.includes(labelId)) {
             setter(current.filter((id) => id !== labelId));
-        else
+        }
+        else {
             setter([...current, labelId]);
+        }
     };
     const submitNewColumn = () => {
-        if (!newColTitle.trim())
+        if (!newColTitle.trim()) {
             return;
+        }
         vscode.postMessage({
             command: "createColumn",
             title: newColTitle.trim(),
@@ -36440,8 +34571,9 @@ const App = () => {
         setEditColColor(col.color);
     };
     const saveEditColumn = () => {
-        if (!editColTitle.trim() || !editingColId)
+        if (!editColTitle.trim() || !editingColId) {
             return;
+        }
         vscode.postMessage({
             command: "editColumn",
             colId: editingColId,
@@ -36451,13 +34583,15 @@ const App = () => {
         setEditingColId(null);
     };
     const moveColumn = (colId, direction) => {
-        if (!boardData)
+        if (!boardData) {
             return;
+        }
         const cols = [...sortedColumns];
         const idx = cols.findIndex((c) => c.id === colId);
         const swapIndex = direction === "left" ? idx - 1 : idx + 1;
-        if (idx < 0 || swapIndex < 0 || swapIndex >= cols.length)
+        if (idx < 0 || swapIndex < 0 || swapIndex >= cols.length) {
             return;
+        }
         const currentPosition = cols[idx].position;
         cols[idx].position = cols[swapIndex].position;
         cols[swapIndex].position = currentPosition;
@@ -36469,21 +34603,17 @@ const App = () => {
         vscode.postMessage({ command: "reorderColumns", updates });
     };
     const getTasksByStatusFiltered = (status) => {
-        if (!boardData || !boardData.tasks)
+        if (!boardData || !boardData.tasks) {
             return [];
-        return tasks
+        }
+        return filteredTasks
             .filter((task) => task.status === status)
-            .filter((task) => !searchTerm ||
-            task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            task.description.toLowerCase().includes(searchTerm.toLowerCase()))
-            .filter((task) => !activeFilterLabel ||
-            (task.labelIds && task.labelIds.includes(activeFilterLabel)))
-            .filter((task) => !activePriorityFilter || getTaskPriority(task) === activePriorityFilter)
             .sort((a, b) => (a.position ?? a.createdAt) - (b.position ?? b.createdAt));
     };
     const renderLabelSelector = (selected, setter) => {
-        if (!boardData || !boardData.labels)
+        if (!boardData || !boardData.labels) {
             return null;
+        }
         return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "5px", flexWrap: "wrap", marginBottom: "8px" } }, Object.values(boardData.labels).map((label) => {
             const isSelected = selected.includes(label.id);
             return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { key: label.id, onClick: () => toggleLabelSelection(label.id, selected, setter), style: {
@@ -36503,18 +34633,16 @@ const App = () => {
         const priority = getTaskPriority(task);
         const dueDate = task.dueDate;
         const isOverdue = Boolean(dueDate && dueDate < Date.now());
-        return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: task.id, draggable: !isEditing && !isFiltering, onDragStart: (e) => handleDragStart(e, task), onDragEnter: () => {
+        const checklistProgress = getChecklistProgress(task);
+        const availableRelationTargets = tasks.filter((candidate) => candidate.id !== task.id);
+        return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-card", key: task.id, draggable: !isEditing && !isFiltering, onDragStart: (e) => handleDragStart(e, task), onDragEnter: (e) => {
+                e.stopPropagation();
                 dragOverTaskRef.current = task.id;
-            }, style: {
-                backgroundColor: "var(--vscode-editor-background)",
-                border: "1px solid var(--vscode-widget-border)",
-                padding: "12px",
-                marginBottom: "10px",
-                borderRadius: "8px",
-                position: "relative",
-                opacity: isFiltering ? 0.9 : 1,
-                boxShadow: "0 2px 4px rgba(0,0,0,0.08)",
-            } }, isEditing ? (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null,
+            }, onDragOver: (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dragOverTaskRef.current = task.id;
+            }, style: { opacity: isFiltering ? 0.9 : 1 } }, isEditing ? (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null,
             react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { autoFocus: true, value: editTitle, onChange: (e) => setEditTitle(e.target.value), style: { width: "100%", marginBottom: "8px", padding: "6px", boxSizing: "border-box" } }),
             react__WEBPACK_IMPORTED_MODULE_0__.createElement("textarea", { value: editDesc, onChange: (e) => setEditDesc(e.target.value), rows: 3, style: { width: "100%", marginBottom: "8px", padding: "6px", boxSizing: "border-box" } }),
             react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "6px", marginBottom: "8px" } },
@@ -36524,6 +34652,57 @@ const App = () => {
                     react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { value: "high" }, "High Priority")),
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { type: "date", value: editDueDate, onChange: (e) => setEditDueDate(e.target.value), style: { flex: 1, padding: "6px" } })),
             renderLabelSelector(editLabelIds, setEditLabelIds),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { borderTop: "1px solid var(--vscode-widget-border)", paddingTop: "8px", marginTop: "8px" } },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "11px", fontWeight: 700, marginBottom: "6px" } }, "Checklist"),
+                (task.checklist || []).map((item) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: item.id, style: { display: "flex", gap: "6px", alignItems: "center", marginBottom: "5px" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { type: "checkbox", checked: item.done, onChange: (e) => vscode.postMessage({
+                            command: "updateChecklistItem",
+                            taskId: task.id,
+                            itemId: item.id,
+                            done: e.target.checked,
+                        }) }),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { defaultValue: item.text, onBlur: (e) => vscode.postMessage({
+                            command: "updateChecklistItem",
+                            taskId: task.id,
+                            itemId: item.id,
+                            text: e.target.value,
+                        }), style: { flex: 1, padding: "4px" } }),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({
+                            command: "deleteChecklistItem",
+                            taskId: task.id,
+                            itemId: item.id,
+                        }) }, "\u00D7")))),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "6px", marginTop: "6px" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { placeholder: "Add checklist item...", value: checklistDrafts[task.id] || "", onChange: (e) => setChecklistDrafts({
+                            ...checklistDrafts,
+                            [task.id]: e.target.value,
+                        }), onKeyDown: (e) => {
+                            if (e.key === "Enter") {
+                                addChecklistItem(task.id);
+                            }
+                        }, style: { flex: 1, padding: "5px" } }),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => addChecklistItem(task.id) }, "Add"))),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { borderTop: "1px solid var(--vscode-widget-border)", paddingTop: "8px", marginTop: "8px" } },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "11px", fontWeight: 700, marginBottom: "6px" } }, "Relations"),
+                (task.relations || []).map((relation) => {
+                    const target = boardData?.tasks[relation.targetTaskId];
+                    return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: relation.id, style: { display: "flex", gap: "6px", alignItems: "center", marginBottom: "5px" } },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: { fontSize: "10px", color: "var(--vscode-descriptionForeground)", minWidth: "72px" } }, relationLabels[relation.type]),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: { flex: 1, fontSize: "11px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, target?.title || "Missing task"),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn delete", onClick: () => deleteTaskRelation(task.id, relation.id) }, "\u00D7")));
+                }),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "grid", gridTemplateColumns: "110px 1fr auto", gap: "6px" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("select", { value: relationTypeByTask[task.id] || "related", onChange: (e) => setRelationTypeByTask({
+                            ...relationTypeByTask,
+                            [task.id]: e.target.value,
+                        }), style: { padding: "5px" } }, Object.entries(relationLabels).map(([value, label]) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { key: value, value: value }, label)))),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("select", { value: relationTargetByTask[task.id] || "", onChange: (e) => setRelationTargetByTask({
+                            ...relationTargetByTask,
+                            [task.id]: e.target.value,
+                        }), style: { padding: "5px", minWidth: 0 } },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { value: "" }, "Select task..."),
+                        availableRelationTargets.map((candidate) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { key: candidate.id, value: candidate.id }, candidate.title)))),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => addTaskRelation(task.id) }, "Link"))),
             react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "5px", justifyContent: "flex-end" } },
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => setEditingTaskId(null) }, "Cancel"),
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: saveEditTask, style: {
@@ -36540,8 +34719,8 @@ const App = () => {
                         color: "var(--vscode-editor-foreground)",
                     } }, task.title),
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { position: "absolute", top: "8px", right: "8px", display: "flex", gap: "2px" } },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: () => startEditingTask(task) }, "\u270F\uFE0F"),
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({ command: "deleteTask", taskId: task.id }) }, "\uD83D\uDDD1\uFE0F"))),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: () => startEditingTask(task) }, "E"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({ command: "deleteTask", taskId: task.id }) }, "D"))),
             react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "6px", marginBottom: "8px", flexWrap: "wrap" } },
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: {
                         fontSize: "10px",
@@ -36556,13 +34735,32 @@ const App = () => {
                         padding: "2px 8px",
                         border: `1px solid ${isOverdue ? "#f85149" : "var(--vscode-widget-border)"}`,
                         color: isOverdue ? "#f85149" : "var(--vscode-descriptionForeground)",
+                    } }, new Date(dueDate).toLocaleDateString())),
+                checklistProgress.total > 0 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: {
+                        fontSize: "10px",
+                        borderRadius: "10px",
+                        padding: "2px 8px",
+                        border: "1px solid var(--vscode-widget-border)",
+                        color: "var(--vscode-descriptionForeground)",
                     } },
-                    "\uD83D\uDCC5 ",
-                    new Date(dueDate).toLocaleDateString()))),
+                    checklistProgress.done,
+                    "/",
+                    checklistProgress.total,
+                    " checks")),
+                (task.relations || []).length > 0 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: {
+                        fontSize: "10px",
+                        borderRadius: "10px",
+                        padding: "2px 8px",
+                        border: "1px solid var(--vscode-widget-border)",
+                        color: "var(--vscode-descriptionForeground)",
+                    } },
+                    (task.relations || []).length,
+                    " links"))),
             task.labelIds && task.labelIds.length > 0 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "4px", flexWrap: "wrap", marginBottom: "8px" } }, task.labelIds.map((id) => {
                 const label = boardData?.labels?.[id];
-                if (!label)
+                if (!label) {
                     return null;
+                }
                 return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { key: id, style: {
                         backgroundColor: label.color,
                         color: "#fff",
@@ -36573,8 +34771,9 @@ const App = () => {
             }))),
             task.codeReference && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { onClick: () => vscode.postMessage({
                     command: "openCode",
-                    filePath: task.codeReference?.filePath,
-                    lineStart: task.codeReference?.lineStart,
+                    filePath: task.codeReference.filePath,
+                    lineStart: task.codeReference.lineStart,
+                    lineEnd: task.codeReference.lineEnd,
                 }), style: {
                     fontSize: "10px",
                     backgroundColor: "var(--vscode-button-secondaryBackground)",
@@ -36585,18 +34784,68 @@ const App = () => {
                     display: "inline-block",
                     color: "var(--vscode-button-secondaryForeground)",
                 } },
-                "\uD83D\uDD17 ",
                 task.codeReference.filePath.split("/").pop(),
-                " (L: ",
-                task.codeReference.lineStart,
-                ")")),
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement("p", { style: {
+                " \u00B7 L",
+                task.codeReference.lineStart)),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: {
                     fontSize: "12px",
                     opacity: 0.85,
                     margin: "0 0 10px 0",
                     color: "var(--vscode-descriptionForeground)",
-                    whiteSpace: "pre-wrap",
-                } }, task.description),
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "2px",
+                } }, renderRichText(task.description)),
+            checklistProgress.total > 0 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { marginBottom: "10px" } },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", justifyContent: "space-between", fontSize: "10px", color: "var(--vscode-descriptionForeground)", marginBottom: "4px" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, "Checklist"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null,
+                        checklistProgress.done,
+                        "/",
+                        checklistProgress.total)),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { height: "4px", backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)", borderRadius: "999px", overflow: "hidden", marginBottom: "6px" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: {
+                            height: "100%",
+                            width: `${Math.round((checklistProgress.done / checklistProgress.total) * 100)}%`,
+                            backgroundColor: "var(--vscode-button-background)",
+                        } })),
+                (task.checklist || []).slice(0, 3).map((item) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: item.id, style: {
+                        display: "flex",
+                        gap: "6px",
+                        alignItems: "center",
+                        fontSize: "11px",
+                        color: item.done
+                            ? "var(--vscode-descriptionForeground)"
+                            : "var(--vscode-foreground)",
+                        textDecoration: item.done ? "line-through" : "none",
+                        marginBottom: "3px",
+                    } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { type: "checkbox", checked: item.done, onChange: (e) => vscode.postMessage({
+                            command: "updateChecklistItem",
+                            taskId: task.id,
+                            itemId: item.id,
+                            done: e.target.checked,
+                        }) }),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, item.text)))),
+                (task.checklist || []).length > 3 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "10px", color: "var(--vscode-descriptionForeground)" } },
+                    "+",
+                    (task.checklist || []).length - 3,
+                    " more")))),
+            (task.relations || []).length > 0 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "10px" } }, (task.relations || []).slice(0, 3).map((relation) => {
+                const target = boardData?.tasks[relation.targetTaskId];
+                return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: relation.id, style: {
+                        display: "grid",
+                        gridTemplateColumns: "70px 1fr",
+                        gap: "6px",
+                        fontSize: "10px",
+                        color: "var(--vscode-descriptionForeground)",
+                        backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
+                        borderRadius: "4px",
+                        padding: "4px 6px",
+                    } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, relationLabels[relation.type]),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: { color: "var(--vscode-foreground)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, target?.title || "Missing task")));
+            }))),
             react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: {
                     display: "flex",
                     justifyContent: "space-between",
@@ -36604,13 +34853,9 @@ const App = () => {
                     opacity: 0.75,
                     color: "var(--vscode-textLink-foreground)",
                 } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null,
-                    "\uD83D\uDC64 ",
-                    task.lastModifiedBy?.username),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, task.lastModifiedBy?.username),
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { textAlign: "right", color: "var(--vscode-descriptionForeground)" } },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null,
-                        "\uD83D\uDD52 ",
-                        formatDateTime(task.createdAt)),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null, formatDateTime(task.createdAt)),
                     isEdited && react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null,
                         "\u270E ",
                         formatDateTime(task.updatedAt))))))));
@@ -36621,8 +34866,9 @@ const App = () => {
             react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { type: "color", value: newLabelColor, onChange: (e) => setNewLabelColor(e.target.value) }),
             react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { placeholder: "New label name...", value: newLabelName, onChange: (e) => setNewLabelName(e.target.value), style: { padding: "6px" } }),
             react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => {
-                    if (!newLabelName.trim())
+                    if (!newLabelName.trim()) {
                         return;
+                    }
                     vscode.postMessage({ command: "createLabel", name: newLabelName.trim(), color: newLabelColor });
                     setNewLabelName("");
                 }, style: { padding: "6px 12px", backgroundColor: "var(--vscode-button-background)", color: "white", border: "none", cursor: "pointer" } }, "Create Label")),
@@ -36641,10 +34887,11 @@ const App = () => {
                         borderRadius: "12px",
                         fontSize: "12px",
                     } }, label.name),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({ command: "deleteLabel", labelId: label.id }) }, "\uD83D\uDDD1\uFE0F Delete")))))));
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({ command: "deleteLabel", labelId: label.id }) }, "Delete")))))));
     const renderInsights = () => {
-        if (!boardData)
+        if (!boardData) {
             return null;
+        }
         const statusStats = tasks.reduce((acc, task) => {
             const colTitle = boardData.columns[task.status]?.title || "Unknown";
             acc[colTitle] = (acc[colTitle] || 0) + 1;
@@ -36683,13 +34930,13 @@ const App = () => {
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("h3", { style: { marginTop: 0 } }, "Risk Metrics"),
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("ul", { style: { listStyle: "none", padding: 0, margin: 0 } },
                     react__WEBPACK_IMPORTED_MODULE_0__.createElement("li", { style: { padding: "8px 0", borderBottom: "1px solid var(--vscode-widget-border)" } },
-                        "\uD83D\uDD34 Overdue tasks: ",
+                        "Overdue tasks: ",
                         react__WEBPACK_IMPORTED_MODULE_0__.createElement("strong", null, metrics.overdue)),
                     react__WEBPACK_IMPORTED_MODULE_0__.createElement("li", { style: { padding: "8px 0", borderBottom: "1px solid var(--vscode-widget-border)" } },
-                        "\uD83D\uDFE1 Stale (>7 days): ",
+                        "Stale (>7 days): ",
                         react__WEBPACK_IMPORTED_MODULE_0__.createElement("strong", null, metrics.stale)),
                     react__WEBPACK_IMPORTED_MODULE_0__.createElement("li", { style: { padding: "8px 0" } },
-                        "\uD83E\uDDED In progress: ",
+                        "In progress: ",
                         react__WEBPACK_IMPORTED_MODULE_0__.createElement("strong", null, metrics.inProgress))),
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("h4", { style: { marginTop: "16px", marginBottom: "8px" } }, "Priority Distribution"),
                 ["high", "medium", "low"].map((priority) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: priority, style: { marginBottom: "8px" } },
@@ -36704,92 +34951,368 @@ const App = () => {
                                 backgroundColor: priorityColors[priority],
                             } }))))))));
     };
-    return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: "20px", height: "100vh", display: "flex", flexDirection: "column", boxSizing: "border-box", gap: "12px" } },
-        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: "10px" } },
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { background: "var(--vscode-editor-inactiveSelectionBackground)", borderRadius: "8px", padding: "10px" } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "11px", opacity: 0.8 } }, "Total tasks"),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "20px", fontWeight: 700 } }, metrics.total)),
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { background: "var(--vscode-editor-inactiveSelectionBackground)", borderRadius: "8px", padding: "10px" } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "11px", opacity: 0.8 } }, "Completed"),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "20px", fontWeight: 700 } }, metrics.completed)),
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { background: "var(--vscode-editor-inactiveSelectionBackground)", borderRadius: "8px", padding: "10px" } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "11px", opacity: 0.8 } }, "Overdue"),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "20px", fontWeight: 700, color: metrics.overdue ? "#f85149" : "inherit" } }, metrics.overdue)),
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { background: "var(--vscode-editor-inactiveSelectionBackground)", borderRadius: "8px", padding: "10px" } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "11px", opacity: 0.8 } }, "Completion rate"),
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "20px", fontWeight: 700 } },
+    const renderTaskMapView = () => {
+        if (!boardData) {
+            return null;
+        }
+        const mapTasks = [...filteredTasks].sort((a, b) => sortedColumns.findIndex((column) => column.id === a.status) -
+            sortedColumns.findIndex((column) => column.id === b.status) ||
+            (a.position ?? a.createdAt) - (b.position ?? b.createdAt));
+        const mapWidth = Math.max(1180, sortedColumns.length * 260 + 320);
+        const mapHeight = Math.max(720, Math.ceil(mapTasks.length / 3) * 190 + 260);
+        const nodePositions = new Map();
+        mapTasks.forEach((task, taskIndex) => {
+            nodePositions.set(task.id, mapNodePositions[task.id] ||
+                getDefaultMapPosition(task, taskIndex, sortedColumns, mapWidth, mapHeight));
+        });
+        const relationLines = mapTasks.flatMap((task) => (task.relations || []).map((relation) => ({
+            relation,
+            source: task,
+            target: boardData.tasks[relation.targetTaskId],
+        }))).filter(({ target }) => Boolean(target));
+        const selectedTask = selectedMapTaskId ? boardData.tasks[selectedMapTaskId] : null;
+        const selectedColumn = selectedTask ? boardData.columns[selectedTask.status] : null;
+        const selectedRelations = selectedTask?.relations || [];
+        return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-table-shell" },
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-map-toolbar" },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { color: "var(--vscode-descriptionForeground)", fontSize: "12px" } }, isMapLinkMode && mapLinkSourceId
+                    ? `Choose a target for "${boardData.tasks[mapLinkSourceId]?.title || "task"}".`
+                    : "Drag tasks freely. Select a task to inspect it."),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("select", { value: mapLinkSourceId ? relationTypeByTask[mapLinkSourceId] || "related" : "related", onChange: (e) => {
+                            if (!mapLinkSourceId) {
+                                return;
+                            }
+                            setRelationTypeByTask({
+                                ...relationTypeByTask,
+                                [mapLinkSourceId]: e.target.value,
+                            });
+                        }, disabled: !isMapLinkMode || !mapLinkSourceId, style: { padding: "5px 8px" }, title: "Relation type" }, Object.entries(relationLabels).map(([value, label]) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { key: value, value: value }, label)))),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => {
+                            const sourceId = selectedMapTaskId || mapLinkSourceId;
+                            setIsMapLinkMode(true);
+                            setMapLinkSourceId(sourceId);
+                        }, disabled: !selectedMapTaskId && !mapLinkSourceId }, "Create link"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => {
+                            setIsMapLinkMode(false);
+                            setMapLinkSourceId(null);
+                        }, disabled: !isMapLinkMode }, "Cancel"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-map-controls", "aria-label": "Map zoom controls" },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => updateMapZoom(mapZoom - mapZoomStep), title: "Zoom out" }, "-"),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: "lynvo-map-zoom-value" },
+                            Math.round(mapZoom * 100),
+                            "%"),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => updateMapZoom(mapZoom + mapZoomStep), title: "Zoom in" }, "+"),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => updateMapZoom(1), title: "Reset zoom" }, "1:1")))),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-map-layout" },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { ref: mapViewportRef, className: `lynvo-task-map${isMapPanning ? " panning" : ""}`, tabIndex: 0, onWheel: handleMapWheel, onKeyDown: handleMapKeyDown, onPointerDown: handleMapBackgroundPointerDown, title: "Drag the background to move. Use Ctrl/Cmd + wheel or +, -, 0 to zoom" }, mapTasks.length > 0 ? (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-task-map-zoom-surface", style: {
+                        width: `${mapWidth}px`,
+                        height: `${mapHeight}px`,
+                        transform: `translate(${mapPanOffset.x}px, ${mapPanOffset.y}px)`,
+                    } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { ref: mapCanvasRef, className: "lynvo-task-map-canvas", style: {
+                            width: `${mapWidth}px`,
+                            height: `${mapHeight}px`,
+                            transform: `scale(${mapZoom})`,
+                        } },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("svg", { viewBox: `0 0 ${mapWidth} ${mapHeight}`, preserveAspectRatio: "none", "aria-hidden": "true" }, relationLines.map(({ relation, source, target }) => {
+                            const from = nodePositions.get(source.id);
+                            const to = target ? nodePositions.get(target.id) : undefined;
+                            if (!from || !to) {
+                                return null;
+                            }
+                            const isBlocking = relation.type === "blocks" || relation.type === "blocked-by";
+                            return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("line", { key: relation.id, x1: from.x, y1: from.y, x2: to.x, y2: to.y, stroke: isBlocking ? "#f85149" : "var(--vscode-textLink-foreground)", strokeWidth: isBlocking ? 2.4 : 1.7, strokeDasharray: relation.type === "related" ? "6 5" : undefined, opacity: 0.72, vectorEffect: "non-scaling-stroke" }));
+                        })),
+                        mapTasks.map((task) => {
+                            const column = boardData.columns[task.status];
+                            const position = nodePositions.get(task.id) || { x: mapWidth / 2, y: mapHeight / 2 };
+                            const priority = getTaskPriority(task);
+                            const dueState = getDueState(task);
+                            const isSelected = selectedMapTaskId === task.id;
+                            const isLinkSource = isMapLinkMode && mapLinkSourceId === task.id;
+                            const borderWidth = priority === "high" ? 5 : priority === "medium" ? 4 : 3;
+                            const relationCount = (task.relations || []).length;
+                            return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { key: task.id, className: `lynvo-map-node ${dueState} ${isSelected ? "selected" : ""} ${isLinkSource ? "link-source" : ""}`, onPointerDown: (event) => {
+                                    const target = event.currentTarget;
+                                    const canvas = mapCanvasRef.current;
+                                    if (!canvas) {
+                                        return;
+                                    }
+                                    const canvasRect = canvas.getBoundingClientRect();
+                                    const pointerX = (event.clientX - canvasRect.left) / mapZoom;
+                                    const pointerY = (event.clientY - canvasRect.top) / mapZoom;
+                                    mapDragRef.current = {
+                                        taskId: task.id,
+                                        offsetX: pointerX - position.x,
+                                        offsetY: pointerY - position.y,
+                                        moved: false,
+                                    };
+                                    target.setPointerCapture(event.pointerId);
+                                }, onClick: () => handleMapTaskClick(task.id), onDoubleClick: () => {
+                                    setActiveView("board");
+                                    startEditingTask(task);
+                                }, title: `${task.title} · ${column?.title || "No column"} · ${priority}`, style: {
+                                    left: `${position.x}px`,
+                                    top: `${position.y}px`,
+                                    background: column?.color || "var(--vscode-button-background)",
+                                    border: `${borderWidth}px solid ${priorityColors[priority]}`,
+                                    color: getReadableTextColor(column?.color || "#007acc"),
+                                } },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null,
+                                    task.title,
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("small", null,
+                                        column?.title || "No column",
+                                        task.dueDate ? ` · ${new Date(task.dueDate).toLocaleDateString()}` : "",
+                                        relationCount ? ` · ${relationCount} links` : ""))));
+                        })))) : (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-map-empty" }, "No tasks match the current filters."))),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("aside", { className: "lynvo-map-panel" }, selectedTask ? (react__WEBPACK_IMPORTED_MODULE_0__.createElement(react__WEBPACK_IMPORTED_MODULE_0__.Fragment, null,
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("h3", null, selectedTask.title),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { color: "var(--vscode-descriptionForeground)", fontSize: "12px", marginBottom: "10px" } },
+                        selectedColumn?.title || "No column",
+                        " \u00B7 ",
+                        getTaskPriority(selectedTask),
+                        selectedTask.dueDate ? ` · ${new Date(selectedTask.dueDate).toLocaleDateString()}` : ""),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => {
+                            setIsMapLinkMode(true);
+                            setMapLinkSourceId(selectedTask.id);
+                        }, style: { width: "100%", marginBottom: "10px" } }, "Create link from this task"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => {
+                            setActiveView("board");
+                            startEditingTask(selectedTask);
+                        }, style: { width: "100%", marginBottom: "12px" } }, "Open task"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "11px", fontWeight: 700, marginBottom: "4px" } }, "Relations"),
+                    selectedRelations.length > 0 ? selectedRelations.map((relation) => {
+                        const target = boardData.tasks[relation.targetTaskId];
+                        return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-relation-row", key: relation.id },
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-relation-meta" },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("strong", null, target?.title || "Missing task"),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: { color: "var(--vscode-descriptionForeground)" } }, relationLabels[relation.type])),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "lynvo-danger-button", onClick: () => deleteTaskRelation(selectedTask.id, relation.id) }, "Delete")));
+                    }) : (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { color: "var(--vscode-descriptionForeground)", fontSize: "12px" } }, "No relations yet.")))) : (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { color: "var(--vscode-descriptionForeground)", fontSize: "12px" } }, "Select a task to inspect relations, open it, or start linking."))))));
+    };
+    const renderTableView = () => {
+        if (!boardData) {
+            return null;
+        }
+        const sortedTableTasks = [...filteredTasks].sort((a, b) => b.updatedAt - a.updatedAt);
+        return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-table-shell" },
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-view-switcher", "aria-label": "Table view mode" },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: tableMode === "rows" ? "active" : "", onClick: () => setTableMode("rows") }, "Rows"),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: tableMode === "map" ? "active" : "", onClick: () => setTableMode("map") }, "Map")),
+            tableMode === "map" ? renderTaskMapView() : (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { flex: 1, overflow: "auto", border: "1px solid var(--vscode-widget-border)", borderRadius: "8px" } },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("table", { style: { width: "100%", borderCollapse: "collapse", minWidth: "980px" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("thead", { style: { position: "sticky", top: 0, backgroundColor: "var(--vscode-editor-background)", zIndex: 2 } },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("tr", null, ["Task", "Status", "Priority", "Due", "Checklist", "Relations", "Updated"].map((header) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("th", { key: header, style: {
+                                textAlign: "left",
+                                padding: "10px",
+                                fontSize: "11px",
+                                color: "var(--vscode-descriptionForeground)",
+                                borderBottom: "1px solid var(--vscode-widget-border)",
+                            } }, header))))),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("tbody", null,
+                        sortedTableTasks.map((task) => {
+                            const checklistProgress = getChecklistProgress(task);
+                            return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("tr", { key: task.id, style: { borderBottom: "1px solid var(--vscode-widget-border)" } },
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("td", { style: { padding: "10px", verticalAlign: "top" } },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => {
+                                            setActiveView("board");
+                                            startEditingTask(task);
+                                        }, style: {
+                                            padding: 0,
+                                            border: "none",
+                                            background: "transparent",
+                                            color: "var(--vscode-textLink-foreground)",
+                                            cursor: "pointer",
+                                            textAlign: "left",
+                                            fontWeight: 700,
+                                        } }, task.title),
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "11px", color: "var(--vscode-descriptionForeground)", marginTop: "4px", maxWidth: "360px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, task.description || "No description")),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("td", { style: { padding: "10px", verticalAlign: "top" } },
+                                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("select", { value: task.status, onChange: (e) => vscode.postMessage({
+                                            command: "updateTaskStatus",
+                                            taskId: task.id,
+                                            newStatus: e.target.value,
+                                        }), style: { padding: "5px", width: "150px" } }, sortedColumns.map((column) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { key: column.id, value: column.id }, column.title))))),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("td", { style: { padding: "10px", verticalAlign: "top", color: priorityColors[getTaskPriority(task)], fontSize: "12px", fontWeight: 700 } }, getTaskPriority(task).toUpperCase()),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("td", { style: { padding: "10px", verticalAlign: "top", fontSize: "12px", color: task.dueDate && task.dueDate < Date.now() ? "#f85149" : "var(--vscode-foreground)" } }, task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "—"),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("td", { style: { padding: "10px", verticalAlign: "top", fontSize: "12px" } }, checklistProgress.total
+                                    ? `${checklistProgress.done}/${checklistProgress.total}`
+                                    : "—"),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("td", { style: { padding: "10px", verticalAlign: "top", fontSize: "12px" } }, (task.relations || []).length || "—"),
+                                react__WEBPACK_IMPORTED_MODULE_0__.createElement("td", { style: { padding: "10px", verticalAlign: "top", fontSize: "11px", color: "var(--vscode-descriptionForeground)" } }, formatDateTime(task.updatedAt))));
+                        }),
+                        sortedTableTasks.length === 0 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("tr", null,
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("td", { colSpan: 7, style: { padding: "24px", color: "var(--vscode-descriptionForeground)", textAlign: "center" } }, "No tasks match the current filters.")))))))));
+    };
+    const renderActivityView = () => {
+        const getActivityColor = (type) => {
+            if (type.includes("deleted")) {
+                return "#f85149";
+            }
+            if (type.includes("created") || type.includes("added")) {
+                return "#3fb950";
+            }
+            if (type.includes("moved")) {
+                return "#58a6ff";
+            }
+            return "var(--vscode-descriptionForeground)";
+        };
+        return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { flex: 1, overflowY: "auto", border: "1px solid var(--vscode-widget-border)", borderRadius: "8px", backgroundColor: "var(--vscode-editor-background)" } },
+            activityItems.length > 0 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap", padding: "10px", borderBottom: "1px solid var(--vscode-widget-border)", position: "sticky", top: 0, backgroundColor: "var(--vscode-editor-background)", zIndex: 1 } },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("select", { value: activityTypeFilter, onChange: (e) => setActivityTypeFilter(e.target.value), style: { padding: "5px", minWidth: "170px" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { value: "" }, "All activity types"),
+                    activityTypes.map((type) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { key: type, value: type }, type.replace(/_/g, " "))))),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("select", { value: activityUserFilter, onChange: (e) => setActivityUserFilter(e.target.value), style: { padding: "5px", minWidth: "150px" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { value: "" }, "All users"),
+                    activityUsers.map((user) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { key: user, value: user }, user)))),
+                (activityTypeFilter || activityUserFilter) && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => {
+                        setActivityTypeFilter("");
+                        setActivityUserFilter("");
+                    } }, "Clear")))),
+            activityItems.length === 0 ? (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: "28px", textAlign: "center", color: "var(--vscode-descriptionForeground)" } }, "No activity yet.")) : filteredActivityItems.length === 0 ? (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: "28px", textAlign: "center", color: "var(--vscode-descriptionForeground)" } }, "No activity matches the current filters.")) : (filteredActivityItems.map((item) => {
+                const task = item.taskId ? boardData?.tasks[item.taskId] : undefined;
+                return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: item.id, style: {
+                        display: "grid",
+                        gridTemplateColumns: "12px 1fr auto",
+                        gap: "12px",
+                        padding: "12px 14px",
+                        borderBottom: "1px solid var(--vscode-widget-border)",
+                        alignItems: "start",
+                    } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: {
+                            width: "8px",
+                            height: "8px",
+                            borderRadius: "999px",
+                            backgroundColor: getActivityColor(item.type),
+                            marginTop: "5px",
+                        } }),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null,
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "13px", color: "var(--vscode-foreground)" } }, item.message),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "4px", fontSize: "11px", color: "var(--vscode-descriptionForeground)" } },
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, item.actor.username),
+                            task && react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, task.title),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, item.type.replace(/_/g, " ")))),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "11px", color: "var(--vscode-descriptionForeground)", whiteSpace: "nowrap" } }, formatDateTime(item.createdAt))));
+            }))));
+    };
+    const renderConflictsView = () => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { flex: 1, overflowY: "auto", border: "1px solid var(--vscode-widget-border)", borderRadius: "8px", backgroundColor: "var(--vscode-editor-background)" } }, unresolvedConflicts.length === 0 ? (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { padding: "28px", textAlign: "center", color: "var(--vscode-descriptionForeground)" } }, "No unresolved conflicts.")) : (unresolvedConflicts.map((conflict) => {
+        const task = boardData?.tasks[conflict.entityId];
+        return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: conflict.id, style: { padding: "14px", borderBottom: "1px solid var(--vscode-widget-border)" } },
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "8px" } },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", null,
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontWeight: 700 } }, task?.title || conflict.entityId),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "11px", color: "var(--vscode-descriptionForeground)" } },
+                        "Field: ",
+                        conflict.field)),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "11px", color: "var(--vscode-descriptionForeground)" } }, formatDateTime(conflict.createdAt))),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "10px" } },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { border: "1px solid var(--vscode-widget-border)", borderRadius: "6px", padding: "8px" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "10px", color: "var(--vscode-descriptionForeground)", marginBottom: "4px" } }, "Local"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { whiteSpace: "pre-wrap", fontSize: "12px" } }, formatConflictValue(conflict.localValue))),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { border: "1px solid var(--vscode-widget-border)", borderRadius: "6px", padding: "8px" } },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { fontSize: "10px", color: "var(--vscode-descriptionForeground)", marginBottom: "4px" } }, "Remote"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { whiteSpace: "pre-wrap", fontSize: "12px" } }, formatConflictValue(conflict.remoteValue)))),
+            renderConflictDiff(conflict.localValue, conflict.remoteValue),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "8px", justifyContent: "flex-end" } },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => vscode.postMessage({
+                        command: "resolveConflict",
+                        conflictId: conflict.id,
+                        resolution: "local",
+                    }) }, "Keep Local"),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => vscode.postMessage({
+                        command: "resolveConflict",
+                        conflictId: conflict.id,
+                        resolution: "remote",
+                    }), style: { backgroundColor: "var(--vscode-button-background)", color: "white", border: "none" } }, "Use Remote"))));
+    }))));
+    return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-shell" },
+        react__WEBPACK_IMPORTED_MODULE_0__.createElement("style", null, lynvoStyles),
+        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-metrics" },
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat" },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat-label" }, "Total tasks"),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat-value" }, metrics.total)),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat" },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat-label" }, "Completed"),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat-value" }, metrics.completed)),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat" },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat-label" }, "Overdue"),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat-value", style: { color: metrics.overdue ? "#f85149" : "inherit" } }, metrics.overdue)),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat" },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat-label" }, "Completion rate"),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-stat-value" },
                     metrics.completionRate,
                     "%"))),
-        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", justifyContent: "space-between", borderBottom: "1px solid var(--vscode-widget-border)", paddingBottom: "10px", flexWrap: "wrap", gap: "10px" } },
-            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("h1", { style: { margin: 0, color: "var(--vscode-textLink-foreground)", fontSize: "24px" } }, "\uD83D\uDE80 Lynvo"),
+        react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-toolbar" },
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-nav" },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-brand" },
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: "lynvo-brand-mark", "aria-hidden": "true" }),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, "Lynvo")),
                 [
                     { id: "board", label: "Board" },
+                    { id: "table", label: "Table" },
+                    { id: "activity", label: "Activity" },
+                    { id: "conflicts", label: `Conflicts${unresolvedConflicts.length ? ` (${unresolvedConflicts.length})` : ""}` },
                     { id: "insights", label: "Insights" },
                     { id: "labels", label: "Labels" },
-                ].map((item) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { key: item.id, onClick: () => setActiveView(item.id), style: {
-                        background: activeView === item.id
-                            ? "var(--vscode-button-background)"
-                            : "transparent",
-                        color: activeView === item.id ? "white" : "var(--vscode-foreground)",
-                        border: "1px solid var(--vscode-widget-border)",
-                        padding: "5px 10px",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                    } }, item.label))),
+                ].map((item) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { key: item.id, onClick: () => setActiveView(item.id), className: `lynvo-tab${activeView === item.id ? " active" : ""}` }, item.label))),
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: triggerSync, disabled: isSyncing, style: {
-                        marginLeft: "4px",
                         padding: "5px 10px",
-                        borderRadius: "4px",
                         cursor: isSyncing ? "wait" : "pointer",
-                        backgroundColor: "var(--vscode-button-secondaryBackground)",
-                        color: "var(--vscode-button-secondaryForeground)",
-                        border: "1px solid var(--vscode-widget-border)",
                         fontWeight: "bold",
-                    } }, isSyncing ? "⏳ Syncing..." : "☁️ Sync Team")),
-            activeView === "board" && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" } },
-                react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { placeholder: "\uD83D\uDD0D Search tasks...", value: searchTerm, onChange: (e) => setSearchTerm(e.target.value), style: { padding: "6px", width: "200px" } }),
+                    } }, isSyncing ? "Syncing..." : "Sync Team"),
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { title: boardData?.sync?.message || syncStatus, style: {
+                        fontSize: "11px",
+                        border: `1px solid ${syncColor}`,
+                        color: syncColor,
+                        borderRadius: "999px",
+                        padding: "3px 8px",
+                        textTransform: "uppercase",
+                        fontWeight: 700,
+                    } }, syncStatus),
+                activeUsers.length > 0 && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { title: activeUsers.map((user) => user.username).join(", "), style: {
+                        fontSize: "11px",
+                        border: "1px solid var(--vscode-widget-border)",
+                        color: "var(--vscode-descriptionForeground)",
+                        borderRadius: "999px",
+                        padding: "3px 8px",
+                        fontWeight: 700,
+                    } },
+                    activeUsers.length,
+                    " online"))),
+            react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-actions" }, (activeView === "board" || activeView === "table") && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-filters" },
+                react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { className: "lynvo-search", placeholder: "Search tasks...", value: searchTerm, onChange: (e) => setSearchTerm(e.target.value) }),
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("select", { value: activeFilterLabel, onChange: (e) => setActiveFilterLabel(e.target.value), style: { padding: "6px" } },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { value: "" }, "\uD83C\uDFF7\uFE0F All Labels"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { value: "" }, "All labels"),
                     boardData?.labels &&
                         Object.values(boardData.labels).map((label) => (react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { key: label.id, value: label.id }, label.name)))),
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("select", { value: activePriorityFilter, onChange: (e) => setActivePriorityFilter(e.target.value), style: { padding: "6px" } },
-                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { value: "" }, "\u26A1 All Priorities"),
+                    react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { value: "" }, "All priorities"),
                     react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { value: "high" }, "High"),
                     react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { value: "medium" }, "Medium"),
                     react__WEBPACK_IMPORTED_MODULE_0__.createElement("option", { value: "low" }, "Low")),
-                isFiltering && react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: { fontSize: "10px", color: "var(--vscode-editorWarning-foreground)" } }, "Drag & Drop disabled")))),
-        boardData && activeView === "board" && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "20px", flex: 1, overflowX: "auto", alignItems: "flex-start", paddingBottom: "20px" } },
+                isFiltering && react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: { fontSize: "10px", color: "var(--vscode-editorWarning-foreground)" } }, "Drag & Drop disabled"))))),
+        boardData && activeView === "board" && (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-board" },
             sortedColumns.map((col) => {
                 const columnTasks = getTasksByStatusFiltered(col.id);
                 return (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { key: col.id, onDragOver: (e) => e.preventDefault(), onDrop: (e) => handleDrop(e, col.id), onDragEnter: () => {
                         dragOverTaskRef.current = null;
                     }, style: {
-                        flex: "0 0 320px",
-                        backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)",
-                        padding: "15px",
-                        borderRadius: "8px",
-                        height: "100%",
-                        overflowY: "auto",
                         borderTop: `4px solid ${col.color}`,
-                        boxSizing: "border-box",
-                    } },
+                    }, className: "lynvo-column" },
                     editingColId === col.id ? (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "5px", marginBottom: "15px", alignItems: "center", backgroundColor: "var(--vscode-editor-background)", padding: "8px", borderRadius: "6px" } },
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: () => moveColumn(col.id, "left") }, "\u25C0"),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: () => moveColumn(col.id, "left") }, "<"),
                         react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { type: "color", value: editColColor, onChange: (e) => setEditColColor(e.target.value), title: "Pick column color" }),
                         react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { value: editColTitle, onChange: (e) => setEditColTitle(e.target.value), style: { flex: 1, padding: "4px", width: "100px" } }),
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: () => moveColumn(col.id, "right") }, "\u25B6"),
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: saveEditColumn }, "\uD83D\uDCBE"),
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: () => setEditingColId(null) }, "\u274C"))) : (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", position: "sticky", top: 0, backgroundColor: "var(--vscode-editor-inactiveSelectionBackground)", zIndex: 1, paddingBottom: "10px", borderBottom: "1px solid var(--vscode-widget-border)" } },
-                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("h3", { style: { margin: 0, display: "flex", gap: "8px", alignItems: "center" } },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: () => moveColumn(col.id, "right") }, ">"),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: saveEditColumn }, "S"),
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: () => setEditingColId(null) }, "X"))) : (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { className: "lynvo-column-header" },
+                        react__WEBPACK_IMPORTED_MODULE_0__.createElement("h3", { className: "lynvo-column-title" },
                             react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", null, col.title),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { style: { fontSize: "11px", opacity: 0.7 } },
-                                "(",
-                                columnTasks.length,
-                                ")")),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("span", { className: "lynvo-count" }, columnTasks.length)),
                         react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "5px" } },
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: () => startEditingColumn(col) }, "\u270F\uFE0F"),
-                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({ command: "deleteColumn", colId: col.id }) }, "\uD83D\uDDD1\uFE0F")))),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn", onClick: () => startEditingColumn(col) }, "E"),
+                            react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { className: "icon-btn delete", onClick: () => vscode.postMessage({ command: "deleteColumn", colId: col.id }) }, "D")))),
                     addingTaskColId === col.id ? (react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { marginBottom: "15px", padding: "10px", backgroundColor: "var(--vscode-editor-background)", borderRadius: "6px", border: "1px solid var(--vscode-focusBorder)" } },
                         react__WEBPACK_IMPORTED_MODULE_0__.createElement("input", { autoFocus: true, placeholder: "Task title...", value: newTaskTitle, onChange: (e) => setNewTaskTitle(e.target.value), style: { width: "100%", marginBottom: "8px", padding: "5px", boxSizing: "border-box" } }),
                         react__WEBPACK_IMPORTED_MODULE_0__.createElement("textarea", { placeholder: "Description (optional)...", value: newTaskDesc, onChange: (e) => setNewTaskDesc(e.target.value), rows: 2, style: { width: "100%", marginBottom: "8px", padding: "5px", boxSizing: "border-box" } }),
@@ -36812,6 +35335,9 @@ const App = () => {
                 react__WEBPACK_IMPORTED_MODULE_0__.createElement("div", { style: { display: "flex", gap: "5px" } },
                     react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => setIsAddingColumn(false), style: { flex: 1 } }, "Cancel"),
                     react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: submitNewColumn, style: { flex: 1, backgroundColor: "var(--vscode-button-background)", color: "white", border: "none" } }, "Create")))) : (react__WEBPACK_IMPORTED_MODULE_0__.createElement("button", { onClick: () => setIsAddingColumn(true), style: { width: "100%", padding: "15px", background: "var(--vscode-button-secondaryBackground)", color: "var(--vscode-button-secondaryForeground)", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold" } }, "+ Add another column"))))),
+        boardData && activeView === "table" && renderTableView(),
+        boardData && activeView === "activity" && renderActivityView(),
+        boardData && activeView === "conflicts" && renderConflictsView(),
         boardData && activeView === "insights" && renderInsights(),
         boardData && activeView === "labels" && renderLabelsManager()));
 };

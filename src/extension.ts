@@ -19,7 +19,7 @@ async function quickCreateTask(): Promise<void> {
     validateInput: (value) =>
       value.trim().length === 0 ? "El título no puede estar vacío." : null,
   });
-  if (!title) return;
+  if (!title) {return;}
 
   const description =
     (await vscode.window.showInputBox({
@@ -43,11 +43,12 @@ async function quickCreateTask(): Promise<void> {
     },
   );
 
-  if (!selectedColumn) return;
+  if (!selectedColumn) {return;}
 
   await DataManager.createTask(title.trim(), description, selectedColumn.columnId);
   vscode.window.showInformationMessage("Tarea creada correctamente en Lynvo.");
   LynvoPanel.refreshData();
+  GitService.scheduleBoardSync();
 }
 
 export function activate(context: vscode.ExtensionContext) {
@@ -56,17 +57,76 @@ export function activate(context: vscode.ExtensionContext) {
     "lynvo.sidebarMenu",
     lynvoMenuProvider,
   );
+  let refreshTimer: NodeJS.Timeout | undefined;
+  const schedulePanelRefresh = () => {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+    }
+    refreshTimer = setTimeout(() => {
+      refreshTimer = undefined;
+      LynvoPanel.refreshData();
+    }, 250);
+  };
+  const boardWatcher = vscode.workspace.createFileSystemWatcher(
+    "**/.vscode/lynvo/**/*.json",
+  );
+  boardWatcher.onDidChange(schedulePanelRefresh, null, context.subscriptions);
+  boardWatcher.onDidCreate(schedulePanelRefresh, null, context.subscriptions);
+  boardWatcher.onDidDelete(schedulePanelRefresh, null, context.subscriptions);
 
   DataManager.initializeBoard().catch((err) =>
     console.error("Lynvo Init Error:", err),
   );
+  DataManager.touchCurrentUser().catch((err) =>
+    console.error("Lynvo Presence Error:", err),
+  );
 
   context.subscriptions.push(treeDataRegistration);
+  context.subscriptions.push(boardWatcher);
+  const autoSyncInterval = setInterval(async () => {
+    await DataManager.touchCurrentUser().catch((err) =>
+      console.error("Lynvo Presence Error:", err),
+    );
+    const result = await GitService.syncBoard();
+    if (result.success) {
+      await LynvoPanel.refreshData();
+      if (result.hasConflicts) {
+        vscode.window.showWarningMessage(
+          "Lynvo detectó conflictos de sincronización. Abre el Conflict Center para resolverlos.",
+          "Abrir conflictos",
+        ).then((action) => {
+          if (action === "Abrir conflictos") {
+            LynvoPanel.render(context.extensionUri, "conflicts");
+          }
+        });
+        return;
+      }
+      if (result.remoteChanged) {
+        vscode.window.showInformationMessage(
+          "Lynvo detectó cambios del equipo y actualizó el tablero.",
+        );
+      }
+    } else {
+      console.warn(`Lynvo periodic sync skipped: ${result.message}`);
+    }
+  }, 120000);
+
+  context.subscriptions.push({
+    dispose: () => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = undefined;
+      }
+      clearInterval(autoSyncInterval);
+      GitService.cancelScheduledSync();
+    },
+  });
 
   context.subscriptions.push(
     vscode.commands.registerCommand("lynvo.connectGitHub", async () => {
       const user = await AuthProvider.getGitHubUser({ createIfNone: true });
       if (user) {
+        await DataManager.touchCurrentUser();
         vscode.window.showInformationMessage(`Conectado como: ${user.username}`);
       }
     }),
@@ -76,6 +136,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand("lynvo.testAuth", async () => {
       const user = await AuthProvider.getGitHubUser({ createIfNone: true });
       if (user) {
+        await DataManager.touchCurrentUser();
         vscode.window.showInformationMessage(`Conectado como: ${user.username}`);
       }
     }),
@@ -94,6 +155,24 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("lynvo.openTable", () => {
+      LynvoPanel.render(context.extensionUri, "table");
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("lynvo.openActivity", () => {
+      LynvoPanel.render(context.extensionUri, "activity");
+    }),
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("lynvo.openConflicts", () => {
+      LynvoPanel.render(context.extensionUri, "conflicts");
+    }),
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand("lynvo.openLabels", () => {
       LynvoPanel.render(context.extensionUri, "labels");
     }),
@@ -102,7 +181,15 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("lynvo.syncBoard", async () => {
       const result = await GitService.syncBoard();
-      if (result.success) {
+      if (result.success && result.hasConflicts) {
+        const action = await vscode.window.showWarningMessage(
+          "Lynvo sincronizó el tablero, pero hay conflictos por resolver.",
+          "Abrir conflictos",
+        );
+        if (action === "Abrir conflictos") {
+          LynvoPanel.render(context.extensionUri, "conflicts");
+        }
+      } else if (result.success) {
         vscode.window.showInformationMessage(result.message);
       } else {
         vscode.window.showWarningMessage(result.message);
@@ -139,7 +226,7 @@ export function activate(context: vscode.ExtensionContext) {
         validateInput: (value) =>
           value.trim().length === 0 ? "El título no puede estar vacío." : null,
       });
-      if (!title) return;
+      if (!title) {return;}
 
       const codeRef = {
         filePath: vscode.workspace.asRelativePath(editor.document.uri),
@@ -150,6 +237,7 @@ export function activate(context: vscode.ExtensionContext) {
       await DataManager.createTask(title.trim(), text, undefined, [], codeRef);
       vscode.window.showInformationMessage("Tarea creada en Lynvo.");
       LynvoPanel.refreshData();
+      GitService.scheduleBoardSync();
     }),
   );
 }

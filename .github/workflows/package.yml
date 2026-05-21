@@ -1,0 +1,35 @@
+name: Package VSIX
+
+on:
+  workflow_dispatch:
+
+jobs:
+  package:
+    name: Build VSIX
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate
+        run: npm test
+
+      - name: Build VSIX
+        run: npx --no-install vsce package --no-dependencies
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: lynvo-vsix
+          path: "*.vsix"
+          if-no-files-found: error

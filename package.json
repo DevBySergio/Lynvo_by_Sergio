@@ -3,6 +3,20 @@
   "displayName": "Lynvo - Project Board by Sergio",
   "description": "Professional Kanban board integrated with GitHub and your code.",
   "version": "0.0.1",
+  "publisher": "DevBySergio",
+  "icon": "media/lynvo.png",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DevBySergio/Lynvo_by_Sergio.git"
+  },
+  "keywords": [
+    "kanban",
+    "github",
+    "project-management",
+    "collaboration",
+    "local-first"
+  ],
   "engines": {
     "vscode": "^1.80.0"
   },
@@ -10,6 +24,10 @@
     "Visualization",
     "Other"
   ],
+  "galleryBanner": {
+    "color": "#0d1117",
+    "theme": "dark"
+  },
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -31,6 +49,18 @@
       {
         "command": "lynvo.openInsights",
         "title": "Lynvo: Open Insights View"
+      },
+      {
+        "command": "lynvo.openTable",
+        "title": "Lynvo: Open Table View"
+      },
+      {
+        "command": "lynvo.openActivity",
+        "title": "Lynvo: Open Activity Feed"
+      },
+      {
+        "command": "lynvo.openConflicts",
+        "title": "Lynvo: Open Conflict Center"
       },
       {
         "command": "lynvo.openLabels",
@@ -62,7 +92,7 @@
         {
           "id": "lynvo-explorer",
           "title": "Lynvo",
-          "icon": "$(project)"
+          "icon": "media/lynvo.svg"
         }
       ]
     },
@@ -78,19 +108,23 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint src",
     "compile": "webpack",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile",
-    "test": "vscode-test"
+    "compile-tests": "tsc -p tsconfig.test.json --outDir out",
+    "watch-tests": "tsc -p tsconfig.test.json -w --outDir out",
+    "smoke": "node scripts/smoke-test.js",
+    "pretest": "npm run typecheck && npm run lint && npm run compile-tests && npm run compile",
+    "test": "npm run smoke",
+    "check": "npm test && npm run package"
   },
   "devDependencies": {
-    "@types/vscode": "^1.80.0",
     "@types/node": "18.x",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "@types/vscode": "^1.80.0",
     "@typescript-eslint/eslint-plugin": "^6.4.1",
     "@typescript-eslint/parser": "^6.4.1",
     "eslint": "^8.47.0",
