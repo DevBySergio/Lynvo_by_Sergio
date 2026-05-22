@@ -2,6 +2,6 @@ node_modules/
 out/
 dist/*.map
 *.vsix
-.vscode-test/
 .DS_Store
+.vscode-test/
 npm-debug.log*

@@ -25,10 +25,10 @@ export class AuthProvider {
         };
       }
     } catch (error) {
-      console.error("Lynvo: Error al autenticar con GitHub", error);
+      console.error("Lynvo: Error authenticating with GitHub", error);
       if (createIfNone) {
         vscode.window.showErrorMessage(
-          "Lynvo: Se requiere iniciar sesión con GitHub para identificar los cambios.",
+          "Lynvo: You must sign in to GitHub to view the changes.",
         );
       }
     }

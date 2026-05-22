@@ -28,9 +28,9 @@ class AuthProvider {
             }
         }
         catch (error) {
-            console.error("Lynvo: Error al autenticar con GitHub", error);
+            console.error("Lynvo: Error authenticating with GitHub", error);
             if (createIfNone) {
-                vscode__WEBPACK_IMPORTED_MODULE_0__.window.showErrorMessage("Lynvo: Se requiere iniciar sesión con GitHub para identificar los cambios.");
+                vscode__WEBPACK_IMPORTED_MODULE_0__.window.showErrorMessage("Lynvo: You must sign in to GitHub to view the changes.");
             }
         }
         return undefined;
@@ -1308,7 +1308,7 @@ class GitService {
         if (!workspacePath) {
             return {
                 success: false,
-                message: "No se encontró el workspace.",
+                message: "Workspace not found.",
                 hasConflicts: false,
             };
         }
@@ -1333,7 +1333,7 @@ class GitService {
             if (!localBoard) {
                 return {
                     success: false,
-                    message: "No hay tablero local que sincronizar.",
+                    message: "No local board to sync.",
                     remoteChanged: false,
                     hasConflicts: false,
                 };
@@ -1423,7 +1423,7 @@ class GitService {
             });
             return {
                 success: true,
-                message: "Lynvo sincronizó el tablero en la rama técnica lynvo-sync.",
+                message: "Lynvo synced the board on the technical branch lynvo-sync.",
                 remoteChanged: Boolean(previousRemoteCommit &&
                     fetchedRemoteCommit &&
                     fetchedRemoteCommit !== previousRemoteCommit),
@@ -1651,7 +1651,9 @@ const asTaskReorderUpdates = (value) => {
         if (!id || !status || position === undefined) {
             return [];
         }
-        return [{ id, status, position, isDraggedTask: asBoolean(item.isDraggedTask) }];
+        return [
+            { id, status, position, isDraggedTask: asBoolean(item.isDraggedTask) },
+        ];
     });
 };
 const asColumnReorderUpdates = (value) => {
@@ -1911,8 +1913,8 @@ class LynvoPanel {
                 case "syncBoard": {
                     const result = await _GitService__WEBPACK_IMPORTED_MODULE_2__.GitService.syncBoard();
                     if (result.success && result.hasConflicts) {
-                        const action = await vscode__WEBPACK_IMPORTED_MODULE_0__.window.showWarningMessage("Lynvo sincronizó el tablero, pero hay conflictos por resolver.", "Abrir conflictos");
-                        if (action === "Abrir conflictos") {
+                        const action = await vscode__WEBPACK_IMPORTED_MODULE_0__.window.showWarningMessage("Lynvo has synchronized the dashboard, but there are still conflicts to resolve.", "Open conflicts");
+                        if (action === "Open conflicts") {
                             this._panel.webview.postMessage({
                                 command: "switchView",
                                 view: "conflicts",
@@ -1986,6 +1988,223 @@ function getNonce() {
 
 /***/ },
 
+/***/ "./src/providers/SkillInstaller.ts"
+/*!*****************************************!*\
+  !*** ./src/providers/SkillInstaller.ts ***!
+  \*****************************************/
+(__unused_webpack_module, __webpack_exports__, __webpack_require__) {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   SkillInstaller: () => (/* binding */ SkillInstaller)
+/* harmony export */ });
+/* harmony import */ var vscode__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(/*! vscode */ "vscode");
+/* harmony import */ var vscode__WEBPACK_IMPORTED_MODULE_0___default = /*#__PURE__*/__webpack_require__.n(vscode__WEBPACK_IMPORTED_MODULE_0__);
+/* harmony import */ var fs_promises__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(/*! fs/promises */ "fs/promises");
+/* harmony import */ var fs_promises__WEBPACK_IMPORTED_MODULE_1___default = /*#__PURE__*/__webpack_require__.n(fs_promises__WEBPACK_IMPORTED_MODULE_1__);
+/* harmony import */ var path__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(/*! path */ "path");
+/* harmony import */ var path__WEBPACK_IMPORTED_MODULE_2___default = /*#__PURE__*/__webpack_require__.n(path__WEBPACK_IMPORTED_MODULE_2__);
+/* harmony import */ var os__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! os */ "os");
+/* harmony import */ var os__WEBPACK_IMPORTED_MODULE_3___default = /*#__PURE__*/__webpack_require__.n(os__WEBPACK_IMPORTED_MODULE_3__);
+/* harmony import */ var crypto__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! crypto */ "crypto");
+/* harmony import */ var crypto__WEBPACK_IMPORTED_MODULE_4___default = /*#__PURE__*/__webpack_require__.n(crypto__WEBPACK_IMPORTED_MODULE_4__);
+
+
+
+
+
+const SKILL_NAME = "lynvo";
+const GLOBAL_TARGETS = [
+    {
+        label: "OpenCode",
+        getPath: () => path__WEBPACK_IMPORTED_MODULE_2__.join(os__WEBPACK_IMPORTED_MODULE_3__.homedir(), ".config", "opencode", "skills", SKILL_NAME),
+        fileName: "SKILL.md",
+        priority: "primary",
+    },
+    {
+        label: "Claude Code",
+        getPath: () => path__WEBPACK_IMPORTED_MODULE_2__.join(os__WEBPACK_IMPORTED_MODULE_3__.homedir(), ".claude", "skills", SKILL_NAME),
+        fileName: "SKILL.md",
+        priority: "primary",
+    },
+    {
+        label: "Cline / Roo Code",
+        getPath: () => path__WEBPACK_IMPORTED_MODULE_2__.join(os__WEBPACK_IMPORTED_MODULE_3__.homedir(), ".clinerules"),
+        fileName: `${SKILL_NAME}.md`,
+        priority: "secondary",
+    },
+];
+const WORKSPACE_TARGETS = [
+    {
+        label: "Cursor",
+        dirName: ".cursor",
+        fileName: "rules.md",
+        priority: "secondary",
+    },
+    {
+        label: "Windsurf",
+        dirName: ".windsurf",
+        fileName: "rules.md",
+        priority: "secondary",
+    },
+    {
+        label: "GitHub Copilot",
+        dirName: ".github",
+        fileName: "copilot-instructions.md",
+        priority: "tertiary",
+    },
+    {
+        label: "OpenCode (project)",
+        dirName: ".opencode",
+        fileName: `skills/${SKILL_NAME}/SKILL.md`,
+        priority: "primary",
+    },
+    {
+        label: "Claude Code (project)",
+        dirName: ".claude",
+        fileName: `skills/${SKILL_NAME}/SKILL.md`,
+        priority: "primary",
+    },
+    {
+        label: "Agents (project)",
+        dirName: ".agents",
+        fileName: `skills/${SKILL_NAME}/SKILL.md`,
+        priority: "secondary",
+    },
+];
+class SkillInstaller {
+    static SETTING_KEY = "autoInstallSkills";
+    static LAST_HASH_KEY = "skillHash";
+    static getWorkspaceUri() {
+        const folders = vscode__WEBPACK_IMPORTED_MODULE_0__.workspace.workspaceFolders;
+        return folders && folders.length > 0 ? folders[0].uri : undefined;
+    }
+    static getConfig() {
+        return vscode__WEBPACK_IMPORTED_MODULE_0__.workspace.getConfiguration("lynvo");
+    }
+    static async readEmbeddedSkill(extensionUri) {
+        const uri = vscode__WEBPACK_IMPORTED_MODULE_0__.Uri.joinPath(extensionUri, "SKILL.md");
+        const data = await vscode__WEBPACK_IMPORTED_MODULE_0__.workspace.fs.readFile(uri);
+        return Buffer.from(data).toString("utf8");
+    }
+    static hash(content) {
+        return crypto__WEBPACK_IMPORTED_MODULE_4__.createHash("sha256").update(content).digest("hex").slice(0, 16);
+    }
+    static async fileExists(filePath) {
+        try {
+            await fs_promises__WEBPACK_IMPORTED_MODULE_1__.stat(filePath);
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
+    static async dirExists(dirPath) {
+        try {
+            const stat = await fs_promises__WEBPACK_IMPORTED_MODULE_1__.stat(dirPath);
+            return stat.isDirectory();
+        }
+        catch {
+            return false;
+        }
+    }
+    static async readInstalledSkill(filePath) {
+        if (!(await this.fileExists(filePath))) {
+            return null;
+        }
+        return fs_promises__WEBPACK_IMPORTED_MODULE_1__.readFile(filePath, "utf8");
+    }
+    static async installAll(extensionUri, context, options = {}) {
+        const installed = [];
+        const skipped = [];
+        const errors = [];
+        const autoInstall = this.getConfig().get(this.SETTING_KEY, true);
+        if (!autoInstall && !options.force) {
+            return { installed, skipped: ["autoInstallSkills is disabled"], errors };
+        }
+        const embedded = await this.readEmbeddedSkill(extensionUri);
+        const embeddedHash = this.hash(embedded);
+        const storedHash = context.globalState.get(this.LAST_HASH_KEY);
+        if (!options.force && storedHash === embeddedHash) {
+            return { installed, skipped: ["no changes detected"], errors };
+        }
+        for (const target of GLOBAL_TARGETS) {
+            try {
+                const dir = target.getPath();
+                const filePath = path__WEBPACK_IMPORTED_MODULE_2__.join(dir, target.fileName);
+                const existing = await this.readInstalledSkill(filePath);
+                if (existing && !options.force) {
+                    const existingHash = this.hash(existing);
+                    if (existingHash === embeddedHash) {
+                        skipped.push(`${target.label}: up to date`);
+                        continue;
+                    }
+                }
+                await fs_promises__WEBPACK_IMPORTED_MODULE_1__.mkdir(dir, { recursive: true });
+                await fs_promises__WEBPACK_IMPORTED_MODULE_1__.writeFile(filePath, embedded, "utf8");
+                installed.push(`${target.label}: ${filePath}`);
+            }
+            catch (err) {
+                const detail = err instanceof Error ? err.message : String(err);
+                errors.push(`${target.label}: ${detail}`);
+            }
+        }
+        const workspaceUri = this.getWorkspaceUri();
+        if (workspaceUri) {
+            for (const target of WORKSPACE_TARGETS) {
+                try {
+                    const targetDir = path__WEBPACK_IMPORTED_MODULE_2__.join(workspaceUri.fsPath, target.dirName);
+                    if (!(await this.dirExists(targetDir))) {
+                        skipped.push(`${target.label}: directory not found (${target.dirName})`);
+                        continue;
+                    }
+                    const filePath = path__WEBPACK_IMPORTED_MODULE_2__.join(workspaceUri.fsPath, target.dirName, target.fileName);
+                    const existing = await this.readInstalledSkill(filePath);
+                    if (existing && !options.force) {
+                        const existingHash = this.hash(existing);
+                        if (existingHash === embeddedHash) {
+                            skipped.push(`${target.label}: up to date`);
+                            continue;
+                        }
+                    }
+                    await fs_promises__WEBPACK_IMPORTED_MODULE_1__.mkdir(path__WEBPACK_IMPORTED_MODULE_2__.dirname(filePath), { recursive: true });
+                    await fs_promises__WEBPACK_IMPORTED_MODULE_1__.writeFile(filePath, embedded, "utf8");
+                    installed.push(`${target.label}: ${filePath}`);
+                }
+                catch (err) {
+                    const detail = err instanceof Error ? err.message : String(err);
+                    errors.push(`${target.label}: ${detail}`);
+                }
+            }
+        }
+        if (installed.length > 0) {
+            await context.globalState.update(this.LAST_HASH_KEY, embeddedHash);
+        }
+        return { installed, skipped, errors };
+    }
+    static async uninstallAll() {
+        const removed = [];
+        const errors = [];
+        for (const target of GLOBAL_TARGETS) {
+            try {
+                const filePath = path__WEBPACK_IMPORTED_MODULE_2__.join(target.getPath(), target.fileName);
+                if (await this.fileExists(filePath)) {
+                    await fs_promises__WEBPACK_IMPORTED_MODULE_1__.unlink(filePath);
+                    removed.push(`${target.label}: ${filePath}`);
+                }
+            }
+            catch (err) {
+                const detail = err instanceof Error ? err.message : String(err);
+                errors.push(`${target.label}: ${detail}`);
+            }
+        }
+        return { removed, errors };
+    }
+}
+
+
+/***/ },
+
 /***/ "vscode"
 /*!*************************!*\
   !*** external "vscode" ***!
@@ -2003,6 +2222,16 @@ module.exports = require("vscode");
 (module) {
 
 module.exports = require("child_process");
+
+/***/ },
+
+/***/ "crypto"
+/*!*************************!*\
+  !*** external "crypto" ***!
+  \*************************/
+(module) {
+
+module.exports = require("crypto");
 
 /***/ },
 
@@ -2128,28 +2357,36 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _providers_DataManager__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(/*! ./providers/DataManager */ "./src/providers/DataManager.ts");
 /* harmony import */ var _providers_LynvoMenuProvider__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(/*! ./providers/LynvoMenuProvider */ "./src/providers/LynvoMenuProvider.ts");
 /* harmony import */ var _providers_GitService__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(/*! ./providers/GitService */ "./src/providers/GitService.ts");
+/* harmony import */ var _providers_SkillInstaller__WEBPACK_IMPORTED_MODULE_6__ = __webpack_require__(/*! ./providers/SkillInstaller */ "./src/providers/SkillInstaller.ts");
 
 
 
 
 
 
+
+async function createTask(title, description, columnId, codeRef) {
+    await _providers_DataManager__WEBPACK_IMPORTED_MODULE_3__.DataManager.createTask(title.trim(), description, columnId, [], codeRef);
+    vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInformationMessage("Task created in Lynvo.");
+    _providers_LynvoPanel__WEBPACK_IMPORTED_MODULE_2__.LynvoPanel.refreshData();
+    _providers_GitService__WEBPACK_IMPORTED_MODULE_5__.GitService.scheduleBoardSync();
+}
 async function quickCreateTask() {
     const board = await _providers_DataManager__WEBPACK_IMPORTED_MODULE_3__.DataManager.loadBoard();
     if (!board) {
-        vscode__WEBPACK_IMPORTED_MODULE_0__.window.showWarningMessage("No se encontró el tablero de Lynvo. Abre una carpeta de proyecto primero.");
+        vscode__WEBPACK_IMPORTED_MODULE_0__.window.showWarningMessage("Lynvo board not found. Open a project folder first.");
         return;
     }
     const title = await vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInputBox({
-        prompt: "Título de la tarea",
-        validateInput: (value) => value.trim().length === 0 ? "El título no puede estar vacío." : null,
+        prompt: "Task title",
+        validateInput: (value) => value.trim().length === 0 ? "Title cannot be empty." : null,
     });
     if (!title) {
         return;
     }
     const description = (await vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInputBox({
-        prompt: "Descripción (opcional)",
-        placeHolder: "Contexto breve de la tarea...",
+        prompt: "Description (optional)",
+        placeHolder: "Brief context for the task...",
     })) || "";
     const sortedColumns = Object.values(board.columns).sort((a, b) => a.position - b.position);
     const selectedColumn = await vscode__WEBPACK_IMPORTED_MODULE_0__.window.showQuickPick(sortedColumns.map((column) => ({
@@ -2157,16 +2394,13 @@ async function quickCreateTask() {
         description: column.id,
         columnId: column.id,
     })), {
-        title: "Selecciona la columna inicial",
-        placeHolder: "¿En qué columna quieres crear la tarea?",
+        title: "Select initial column",
+        placeHolder: "Which column should the task start in?",
     });
     if (!selectedColumn) {
         return;
     }
-    await _providers_DataManager__WEBPACK_IMPORTED_MODULE_3__.DataManager.createTask(title.trim(), description, selectedColumn.columnId);
-    vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInformationMessage("Tarea creada correctamente en Lynvo.");
-    _providers_LynvoPanel__WEBPACK_IMPORTED_MODULE_2__.LynvoPanel.refreshData();
-    _providers_GitService__WEBPACK_IMPORTED_MODULE_5__.GitService.scheduleBoardSync();
+    await createTask(title.trim(), description, selectedColumn.columnId);
 }
 function activate(context) {
     const lynvoMenuProvider = new _providers_LynvoMenuProvider__WEBPACK_IMPORTED_MODULE_4__.LynvoMenuProvider();
@@ -2187,6 +2421,14 @@ function activate(context) {
     boardWatcher.onDidDelete(schedulePanelRefresh, null, context.subscriptions);
     _providers_DataManager__WEBPACK_IMPORTED_MODULE_3__.DataManager.initializeBoard().catch((err) => console.error("Lynvo Init Error:", err));
     _providers_DataManager__WEBPACK_IMPORTED_MODULE_3__.DataManager.touchCurrentUser().catch((err) => console.error("Lynvo Presence Error:", err));
+    _providers_SkillInstaller__WEBPACK_IMPORTED_MODULE_6__.SkillInstaller.installAll(context.extensionUri, context, { silent: true }).then((result) => {
+        if (result.installed.length > 0) {
+            console.log(`Lynvo: skills installed → ${result.installed.join(", ")}`);
+        }
+        if (result.errors.length > 0) {
+            console.warn(`Lynvo: skill install errors → ${result.errors.join(", ")}`);
+        }
+    }).catch((err) => console.error("Lynvo Skill Install Error:", err));
     context.subscriptions.push(treeDataRegistration);
     context.subscriptions.push(boardWatcher);
     const autoSyncInterval = setInterval(async () => {
@@ -2195,15 +2437,15 @@ function activate(context) {
         if (result.success) {
             await _providers_LynvoPanel__WEBPACK_IMPORTED_MODULE_2__.LynvoPanel.refreshData();
             if (result.hasConflicts) {
-                vscode__WEBPACK_IMPORTED_MODULE_0__.window.showWarningMessage("Lynvo detectó conflictos de sincronización. Abre el Conflict Center para resolverlos.", "Abrir conflictos").then((action) => {
-                    if (action === "Abrir conflictos") {
+                vscode__WEBPACK_IMPORTED_MODULE_0__.window.showWarningMessage("Lynvo detected sync conflicts. Open the Conflict Center to resolve them.", "Open conflicts").then((action) => {
+                    if (action === "Open conflicts") {
                         _providers_LynvoPanel__WEBPACK_IMPORTED_MODULE_2__.LynvoPanel.render(context.extensionUri, "conflicts");
                     }
                 });
                 return;
             }
             if (result.remoteChanged) {
-                vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInformationMessage("Lynvo detectó cambios del equipo y actualizó el tablero.");
+                vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInformationMessage("Lynvo detected team changes and updated the board.");
             }
         }
         else {
@@ -2224,14 +2466,7 @@ function activate(context) {
         const user = await _providers_AuthProvider__WEBPACK_IMPORTED_MODULE_1__.AuthProvider.getGitHubUser({ createIfNone: true });
         if (user) {
             await _providers_DataManager__WEBPACK_IMPORTED_MODULE_3__.DataManager.touchCurrentUser();
-            vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInformationMessage(`Conectado como: ${user.username}`);
-        }
-    }));
-    context.subscriptions.push(vscode__WEBPACK_IMPORTED_MODULE_0__.commands.registerCommand("lynvo.testAuth", async () => {
-        const user = await _providers_AuthProvider__WEBPACK_IMPORTED_MODULE_1__.AuthProvider.getGitHubUser({ createIfNone: true });
-        if (user) {
-            await _providers_DataManager__WEBPACK_IMPORTED_MODULE_3__.DataManager.touchCurrentUser();
-            vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInformationMessage(`Conectado como: ${user.username}`);
+            vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInformationMessage(`Connected as: ${user.username}`);
         }
     }));
     context.subscriptions.push(vscode__WEBPACK_IMPORTED_MODULE_0__.commands.registerCommand("lynvo.openBoard", () => {
@@ -2255,8 +2490,8 @@ function activate(context) {
     context.subscriptions.push(vscode__WEBPACK_IMPORTED_MODULE_0__.commands.registerCommand("lynvo.syncBoard", async () => {
         const result = await _providers_GitService__WEBPACK_IMPORTED_MODULE_5__.GitService.syncBoard();
         if (result.success && result.hasConflicts) {
-            const action = await vscode__WEBPACK_IMPORTED_MODULE_0__.window.showWarningMessage("Lynvo sincronizó el tablero, pero hay conflictos por resolver.", "Abrir conflictos");
-            if (action === "Abrir conflictos") {
+            const action = await vscode__WEBPACK_IMPORTED_MODULE_0__.window.showWarningMessage("Lynvo synced the board, but there are conflicts to resolve.", "Open conflicts");
+            if (action === "Open conflicts") {
                 _providers_LynvoPanel__WEBPACK_IMPORTED_MODULE_2__.LynvoPanel.render(context.extensionUri, "conflicts");
             }
         }
@@ -2274,18 +2509,18 @@ function activate(context) {
     context.subscriptions.push(vscode__WEBPACK_IMPORTED_MODULE_0__.commands.registerCommand("lynvo.createTaskFromCode", async () => {
         const editor = vscode__WEBPACK_IMPORTED_MODULE_0__.window.activeTextEditor;
         if (!editor) {
-            vscode__WEBPACK_IMPORTED_MODULE_0__.window.showErrorMessage("No hay ningún archivo abierto.");
+            vscode__WEBPACK_IMPORTED_MODULE_0__.window.showErrorMessage("No file is currently open.");
             return;
         }
         const selection = editor.selection;
         const text = editor.document.getText(selection).trim();
         if (!text) {
-            vscode__WEBPACK_IMPORTED_MODULE_0__.window.showErrorMessage("Selecciona un fragmento de código primero.");
+            vscode__WEBPACK_IMPORTED_MODULE_0__.window.showErrorMessage("Select a code fragment first.");
             return;
         }
         const title = await vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInputBox({
-            prompt: "Título de la tarea",
-            validateInput: (value) => value.trim().length === 0 ? "El título no puede estar vacío." : null,
+            prompt: "Task title",
+            validateInput: (value) => value.trim().length === 0 ? "Title cannot be empty." : null,
         });
         if (!title) {
             return;
@@ -2295,10 +2530,36 @@ function activate(context) {
             lineStart: selection.start.line + 1,
             lineEnd: selection.end.line + 1,
         };
-        await _providers_DataManager__WEBPACK_IMPORTED_MODULE_3__.DataManager.createTask(title.trim(), text, undefined, [], codeRef);
-        vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInformationMessage("Tarea creada en Lynvo.");
-        _providers_LynvoPanel__WEBPACK_IMPORTED_MODULE_2__.LynvoPanel.refreshData();
-        _providers_GitService__WEBPACK_IMPORTED_MODULE_5__.GitService.scheduleBoardSync();
+        await createTask(title.trim(), text, undefined, codeRef);
+    }));
+    context.subscriptions.push(vscode__WEBPACK_IMPORTED_MODULE_0__.commands.registerCommand("lynvo.installSkills", async () => {
+        const result = await vscode__WEBPACK_IMPORTED_MODULE_0__.window.withProgress({
+            location: vscode__WEBPACK_IMPORTED_MODULE_0__.ProgressLocation.Notification,
+            title: "Lynvo: Installing agent skills...",
+            cancellable: false,
+        }, () => _providers_SkillInstaller__WEBPACK_IMPORTED_MODULE_6__.SkillInstaller.installAll(context.extensionUri, context, { force: true }));
+        const messages = [];
+        if (result.installed.length > 0) {
+            messages.push(`Installed: ${result.installed.length} location(s)`);
+        }
+        if (result.skipped.length > 0) {
+            messages.push(`Skipped: ${result.skipped.length} location(s)`);
+        }
+        if (result.errors.length > 0) {
+            messages.push(`Errors: ${result.errors.join("; ")}`);
+        }
+        if (messages.length === 0) {
+            vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInformationMessage("Lynvo skills are already up to date.");
+        }
+        else {
+            const detail = messages.join("\n");
+            if (result.errors.length > 0) {
+                vscode__WEBPACK_IMPORTED_MODULE_0__.window.showWarningMessage(detail);
+            }
+            else {
+                vscode__WEBPACK_IMPORTED_MODULE_0__.window.showInformationMessage(detail);
+            }
+        }
     }));
 }
 function deactivate() { }

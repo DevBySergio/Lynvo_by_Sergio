@@ -3,7 +3,13 @@ import { DataManager } from "./DataManager";
 import { GitService } from "./GitService";
 import { LynvoTaskRelationType } from "../types";
 
-type LynvoView = "board" | "table" | "activity" | "conflicts" | "insights" | "labels";
+type LynvoView =
+  | "board"
+  | "table"
+  | "activity"
+  | "conflicts"
+  | "insights"
+  | "labels";
 
 type WebviewMessage = {
   command?: string;
@@ -44,7 +50,9 @@ const asResolution = (value: unknown): "local" | "remote" | undefined =>
 const asCodeReference = (
   value: unknown,
 ): { filePath: string; lineStart: number; lineEnd: number } | undefined => {
-  if (!isRecord(value)) {return undefined;}
+  if (!isRecord(value)) {
+    return undefined;
+  }
   const filePath = asString(value.filePath);
   const lineStart = asNumber(value.lineStart);
   const lineEnd = asNumber(value.lineEnd);
@@ -62,27 +70,46 @@ const isSafeWorkspaceRelativePath = (filePath: string): boolean =>
 
 const asTaskReorderUpdates = (
   value: unknown,
-): Array<{ id: string; status: string; position: number; isDraggedTask?: boolean }> => {
-  if (!Array.isArray(value)) {return [];}
+): Array<{
+  id: string;
+  status: string;
+  position: number;
+  isDraggedTask?: boolean;
+}> => {
+  if (!Array.isArray(value)) {
+    return [];
+  }
   return value.flatMap((item) => {
-    if (!isRecord(item)) {return [];}
+    if (!isRecord(item)) {
+      return [];
+    }
     const id = asString(item.id);
     const status = asString(item.status);
     const position = asNumber(item.position);
-    if (!id || !status || position === undefined) {return [];}
-    return [{ id, status, position, isDraggedTask: asBoolean(item.isDraggedTask) }];
+    if (!id || !status || position === undefined) {
+      return [];
+    }
+    return [
+      { id, status, position, isDraggedTask: asBoolean(item.isDraggedTask) },
+    ];
   });
 };
 
 const asColumnReorderUpdates = (
   value: unknown,
 ): Array<{ id: string; position: number }> => {
-  if (!Array.isArray(value)) {return [];}
+  if (!Array.isArray(value)) {
+    return [];
+  }
   return value.flatMap((item) => {
-    if (!isRecord(item)) {return [];}
+    if (!isRecord(item)) {
+      return [];
+    }
     const id = asString(item.id);
     const position = asNumber(item.position);
-    if (!id || position === undefined) {return [];}
+    if (!id || position === undefined) {
+      return [];
+    }
     return [{ id, position }];
   });
 };
@@ -102,7 +129,10 @@ export class LynvoPanel {
     this._setWebviewMessageListener(this._panel.webview);
   }
 
-  public static render(extensionUri: vscode.Uri, initialView: LynvoView = "board") {
+  public static render(
+    extensionUri: vscode.Uri,
+    initialView: LynvoView = "board",
+  ) {
     if (LynvoPanel.currentPanel) {
       LynvoPanel.currentPanel._panel.reveal(vscode.ViewColumn.One);
       LynvoPanel.currentPanel._panel.webview.postMessage({
@@ -171,21 +201,27 @@ export class LynvoPanel {
           case "updateTaskStatus": {
             const taskId = asString(message.taskId);
             const newStatus = asString(message.newStatus);
-            if (!taskId || !newStatus) {return;}
+            if (!taskId || !newStatus) {
+              return;
+            }
             await DataManager.updateTaskStatus(taskId, newStatus);
             LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "reorderTasks": {
             const updates = asTaskReorderUpdates(message.updates);
-            if (updates.length === 0) {return;}
+            if (updates.length === 0) {
+              return;
+            }
             await DataManager.reorderTasks(updates);
             LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "createTask": {
             const title = asString(message.title);
-            if (!title) {return;}
+            if (!title) {
+              return;
+            }
             await DataManager.createTask(
               title,
               asString(message.description) || "",
@@ -201,7 +237,9 @@ export class LynvoPanel {
           case "editTask": {
             const taskId = asString(message.taskId);
             const title = asString(message.title);
-            if (!taskId || !title) {return;}
+            if (!taskId || !title) {
+              return;
+            }
             await DataManager.editTask(
               taskId,
               title,
@@ -215,7 +253,9 @@ export class LynvoPanel {
           }
           case "deleteTask": {
             const taskId = asString(message.taskId);
-            if (!taskId) {return;}
+            if (!taskId) {
+              return;
+            }
             const confirmTask = await vscode.window.showWarningMessage(
               "Delete task?",
               { modal: true },
@@ -229,7 +269,9 @@ export class LynvoPanel {
           }
           case "createColumn": {
             const title = asString(message.title);
-            if (!title) {return;}
+            if (!title) {
+              return;
+            }
             await DataManager.createColumn(
               title,
               asString(message.color) || "var(--vscode-charts-blue)",
@@ -240,7 +282,9 @@ export class LynvoPanel {
           case "editColumn": {
             const colId = asString(message.colId);
             const title = asString(message.title);
-            if (!colId || !title) {return;}
+            if (!colId || !title) {
+              return;
+            }
             await DataManager.editColumn(
               colId,
               title,
@@ -251,7 +295,9 @@ export class LynvoPanel {
           }
           case "deleteColumn": {
             const colId = asString(message.colId);
-            if (!colId) {return;}
+            if (!colId) {
+              return;
+            }
             const confirmCol = await vscode.window.showWarningMessage(
               "Delete column? ALL TASKS inside will be deleted.",
               { modal: true },
@@ -265,14 +311,18 @@ export class LynvoPanel {
           }
           case "reorderColumns": {
             const updates = asColumnReorderUpdates(message.updates);
-            if (updates.length === 0) {return;}
+            if (updates.length === 0) {
+              return;
+            }
             await DataManager.reorderColumns(updates);
             LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "createLabel": {
             const name = asString(message.name);
-            if (!name) {return;}
+            if (!name) {
+              return;
+            }
             await DataManager.createLabel(
               name,
               asString(message.color) || "#f85149",
@@ -282,7 +332,9 @@ export class LynvoPanel {
           }
           case "deleteLabel": {
             const labelId = asString(message.labelId);
-            if (!labelId) {return;}
+            if (!labelId) {
+              return;
+            }
             await DataManager.deleteLabel(labelId);
             LynvoPanel.refreshDataAndScheduleSync();
             return;
@@ -290,7 +342,9 @@ export class LynvoPanel {
           case "addChecklistItem": {
             const taskId = asString(message.taskId);
             const text = asString(message.text);
-            if (!taskId || !text) {return;}
+            if (!taskId || !text) {
+              return;
+            }
             await DataManager.addChecklistItem(taskId, text);
             LynvoPanel.refreshDataAndScheduleSync();
             return;
@@ -298,7 +352,9 @@ export class LynvoPanel {
           case "updateChecklistItem": {
             const taskId = asString(message.taskId);
             const itemId = asString(message.itemId);
-            if (!taskId || !itemId) {return;}
+            if (!taskId || !itemId) {
+              return;
+            }
             await DataManager.updateChecklistItem(taskId, itemId, {
               text: asString(message.text),
               done: asBoolean(message.done),
@@ -309,7 +365,9 @@ export class LynvoPanel {
           case "deleteChecklistItem": {
             const taskId = asString(message.taskId);
             const itemId = asString(message.itemId);
-            if (!taskId || !itemId) {return;}
+            if (!taskId || !itemId) {
+              return;
+            }
             await DataManager.deleteChecklistItem(taskId, itemId);
             LynvoPanel.refreshDataAndScheduleSync();
             return;
@@ -318,7 +376,9 @@ export class LynvoPanel {
             const taskId = asString(message.taskId);
             const targetTaskId = asString(message.targetTaskId);
             const relationType = asRelationType(message.relationType);
-            if (!taskId || !targetTaskId || !relationType) {return;}
+            if (!taskId || !targetTaskId || !relationType) {
+              return;
+            }
             await DataManager.addTaskRelation(
               taskId,
               targetTaskId,
@@ -330,7 +390,9 @@ export class LynvoPanel {
           case "deleteTaskRelation": {
             const taskId = asString(message.taskId);
             const relationId = asString(message.relationId);
-            if (!taskId || !relationId) {return;}
+            if (!taskId || !relationId) {
+              return;
+            }
             await DataManager.deleteTaskRelation(taskId, relationId);
             LynvoPanel.refreshDataAndScheduleSync();
             return;
@@ -338,7 +400,9 @@ export class LynvoPanel {
           case "resolveConflict": {
             const conflictId = asString(message.conflictId);
             const resolution = asResolution(message.resolution);
-            if (!conflictId || !resolution) {return;}
+            if (!conflictId || !resolution) {
+              return;
+            }
             await DataManager.resolveConflict(conflictId, resolution);
             LynvoPanel.refreshDataAndScheduleSync();
             return;
@@ -347,10 +411,10 @@ export class LynvoPanel {
             const result = await GitService.syncBoard();
             if (result.success && result.hasConflicts) {
               const action = await vscode.window.showWarningMessage(
-                "Lynvo sincronizó el tablero, pero hay conflictos por resolver.",
-                "Abrir conflictos",
+                "Lynvo has synchronized the dashboard, but there are still conflicts to resolve.",
+                "Open conflicts",
               );
-              if (action === "Abrir conflictos") {
+              if (action === "Open conflicts") {
                 this._panel.webview.postMessage({
                   command: "switchView",
                   view: "conflicts",
@@ -371,7 +435,9 @@ export class LynvoPanel {
               !filePath ||
               !isSafeWorkspaceRelativePath(filePath) ||
               lineStart === undefined
-            ) {return;}
+            ) {
+              return;
+            }
             const folders = vscode.workspace.workspaceFolders;
             if (!folders || folders.length === 0) {
               return;
@@ -398,7 +464,10 @@ export class LynvoPanel {
     );
   }
 
-  private _getWebviewContent(webview: vscode.Webview, extensionUri: vscode.Uri) {
+  private _getWebviewContent(
+    webview: vscode.Webview,
+    extensionUri: vscode.Uri,
+  ) {
     const scriptUri = webview.asWebviewUri(
       vscode.Uri.joinPath(extensionUri, "dist", "webview.js"),
     );

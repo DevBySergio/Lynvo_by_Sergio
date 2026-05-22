@@ -28,8 +28,19 @@
     "color": "#0d1117",
     "theme": "dark"
   },
-  "activationEvents": [
-    "onStartupFinished"
+    "activationEvents": [
+    "onView:lynvo.sidebarMenu",
+    "onCommand:lynvo.openBoard",
+    "onCommand:lynvo.openTable",
+    "onCommand:lynvo.openActivity",
+    "onCommand:lynvo.openConflicts",
+    "onCommand:lynvo.openLabels",
+    "onCommand:lynvo.openInsights",
+    "onCommand:lynvo.quickCreateTask",
+    "onCommand:lynvo.createTaskFromCode",
+    "onCommand:lynvo.syncBoard",
+    "onCommand:lynvo.connectGitHub",
+    "onCommand:lynvo.installSkills"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -37,10 +48,6 @@
       {
         "command": "lynvo.connectGitHub",
         "title": "Lynvo: Connect GitHub"
-      },
-      {
-        "command": "lynvo.testAuth",
-        "title": "Lynvo: Test GitHub Identity"
       },
       {
         "command": "lynvo.openBoard",
@@ -76,7 +83,11 @@
       },
       {
         "command": "lynvo.createTaskFromCode",
-        "title": "Lynvo: Crear Tarea desde Selección"
+        "title": "Lynvo: Create Task from Selection"
+      },
+      {
+        "command": "lynvo.installSkills",
+        "title": "Lynvo: Install Agent Skills"
       }
     ],
     "menus": {
@@ -100,10 +111,20 @@
       "lynvo-explorer": [
         {
           "id": "lynvo.sidebarMenu",
-          "name": "Acciones del Proyecto",
+          "name": "Project Actions",
           "icon": "$(list-flat)"
         }
       ]
+    },
+    "configuration": {
+      "title": "Lynvo",
+      "properties": {
+        "lynvo.autoInstallSkills": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically install Lynvo agent skills (SKILL.md) for OpenCode, Claude Code, Cline, Cursor, and other AI agents on extension activation."
+        }
+      }
     }
   },
   "scripts": {

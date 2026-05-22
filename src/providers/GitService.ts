@@ -509,7 +509,7 @@ export class GitService {
       if (!workspacePath) {
       return {
         success: false,
-        message: "No se encontró el workspace.",
+        message: "Workspace not found.",
         hasConflicts: false,
       };
     }
@@ -538,7 +538,7 @@ export class GitService {
       if (!localBoard) {
         return {
           success: false,
-          message: "No hay tablero local que sincronizar.",
+          message: "No local board to sync.",
           remoteChanged: false,
           hasConflicts: false,
         };
@@ -648,7 +648,7 @@ export class GitService {
 
       return {
         success: true,
-        message: "Lynvo sincronizó el tablero en la rama técnica lynvo-sync.",
+        message: "Lynvo synced the board on the technical branch lynvo-sync.",
         remoteChanged: Boolean(
           previousRemoteCommit &&
             fetchedRemoteCommit &&
