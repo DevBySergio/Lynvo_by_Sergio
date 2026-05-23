@@ -1,0 +1,15 @@
+{
+  "version": "2.0.0",
+  "labels": {
+    "bug": {
+      "id": "bug",
+      "name": "Bug",
+      "color": "#f85149"
+    },
+    "feat": {
+      "id": "feat",
+      "name": "Feature",
+      "color": "#a371f7"
+    }
+  }
+}

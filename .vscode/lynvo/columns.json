@@ -1,0 +1,20 @@
+{
+  "todo": {
+    "id": "todo",
+    "title": "To Do",
+    "color": "var(--vscode-charts-blue)",
+    "position": 0
+  },
+  "in-progress": {
+    "id": "in-progress",
+    "title": "In Progress",
+    "color": "var(--vscode-charts-yellow)",
+    "position": 1
+  },
+  "done": {
+    "id": "done",
+    "title": "Done",
+    "color": "var(--vscode-charts-green)",
+    "position": 2
+  }
+}
