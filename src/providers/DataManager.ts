@@ -1,4 +1,8 @@
 import * as vscode from "vscode";
+import { AsyncLocalStorage } from "async_hooks";
+import { randomUUID } from "crypto";
+import { withBoardLock } from "./BoardLock";
+import { cloneBoardValue, conflictSnapshotMatches, getBoardContentFingerprint, hasOwn, isSafeEntityId, normalizeBoard, normalizeChecklist, normalizeRelations, stableStringify } from "../boardValidation";
 import {
   CodeReference,
   LynvoActivity,
@@ -30,11 +34,47 @@ export class DataManager {
   private static readonly MODULAR_FOLDER = "lynvo";
   private static readonly SCHEMA_VERSION = "2.0.0";
   private static writeQueue: Promise<void> = Promise.resolve();
+  private static selectedWorkspaceUri: vscode.Uri | undefined;
+  private static workspaceContext = new AsyncLocalStorage<vscode.Uri>();
+  private static readBaseline = new Map<string, string>();
+  private static readLocations = new Map<string, vscode.Uri>();
 
-  private static getWorkspaceUri(): vscode.Uri | undefined {
+  public static getWorkspaceUri(): vscode.Uri | undefined {
+    const scoped = this.workspaceContext.getStore();
+    if (scoped) {return scoped;}
+    return this.getActiveWorkspaceUri();
+  }
+
+  public static getActiveWorkspaceUri(): vscode.Uri | undefined {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     if (!workspaceFolders || workspaceFolders.length === 0) {return undefined;}
+    if (this.selectedWorkspaceUri && workspaceFolders.some((folder) => folder.uri.path === this.selectedWorkspaceUri?.path)) {
+      return this.selectedWorkspaceUri;
+    }
     return workspaceFolders[0].uri;
+  }
+
+  public static setWorkspaceUri(uri: vscode.Uri): void {this.selectedWorkspaceUri = uri;}
+
+  public static withWorkspace<T>(uri: vscode.Uri, operation: () => Promise<T>): Promise<T> {
+    return this.workspaceContext.run(uri, operation);
+  }
+
+  private static enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const workspace = this.getWorkspaceUri();
+    const run = this.writeQueue.catch(() => undefined).then(async () => {
+      const execute = async () => {
+        this.readBaseline = new Map();
+        this.readLocations = new Map();
+        return operation();
+      };
+      if (!workspace) {return execute();}
+      return this.withWorkspace(workspace, () => withBoardLock(
+        `${workspace.scheme || "file"}:${workspace.authority || ""}:${workspace.path}`, execute,
+      ));
+    });
+    this.writeQueue = run.then(() => undefined, () => undefined);
+    return run;
   }
 
   private static getFolderUri(): vscode.Uri | undefined {
@@ -61,7 +101,7 @@ export class DataManager {
     return vscode.Uri.joinPath(root, ...segments);
   }
 
-  private static getDefaultBoard(): LynvoBoard {
+  public static getDefaultBoard(): LynvoBoard {
     return {
       version: this.SCHEMA_VERSION,
       columns: {
@@ -96,6 +136,14 @@ export class DataManager {
     };
   }
 
+  public static isDefaultUntouchedBoard(board: LynvoBoard): boolean {
+    const defaults = this.getDefaultBoard();
+    return stableStringify(board.columns) === stableStringify(defaults.columns) &&
+      stableStringify(board.labels || {}) === stableStringify(defaults.labels || {}) &&
+      [board.tasks, board.activity, board.tombstones, board.conflicts].every((value) => !Object.keys(value || {}).length) &&
+      !board.sync?.pendingChanges && !board.sync?.lastSyncAt && !board.sync?.lastRemoteCommit;
+  }
+
   private static getDefaultSyncMetadata(): LynvoSyncMetadata {
     return {
       branch: "lynvo-sync",
@@ -113,79 +161,25 @@ export class DataManager {
   }
 
   private static ensureBoardIntegrity(board: Partial<LynvoBoard>): LynvoBoard {
-    const defaults = this.getDefaultBoard();
-    const next: LynvoBoard = {
-      version: this.SCHEMA_VERSION,
-      columns:
-        board.columns && Object.keys(board.columns).length > 0
-          ? board.columns
-          : defaults.columns,
-      tasks: board.tasks || {},
-      labels: board.labels || defaults.labels,
-      users: board.users || {},
-      activity: board.activity || {},
-      sync: {
-        ...this.getDefaultSyncMetadata(),
-        ...(board.sync || {}),
-      },
-      tombstones: board.tombstones || {},
-      conflicts: board.conflicts || {},
-    };
-
-    const sortedColumns = Object.values(next.columns).sort(
-      (a, b) => a.position - b.position,
-    );
-    const fallbackColumnId = sortedColumns[0]?.id ?? "todo";
-
-    Object.values(next.columns).forEach((column, index) => {
-      if (!column.id) {column.id = this.createId("col");}
-      if (!column.title) {column.title = "Untitled";}
-      if (!column.color) {column.color = "var(--vscode-charts-blue)";}
-      if (!Number.isFinite(column.position)) {column.position = index;}
-    });
-
-    Object.values(next.tasks).forEach((task) => {
-      if (!next.columns[task.status]) {
-        task.status = fallbackColumnId;
-      }
-
-      if (!task.createdAt) {task.createdAt = Date.now();}
-      if (!task.updatedAt) {task.updatedAt = task.createdAt;}
-      if (!task.createdBy) {
-        task.createdBy = UNKNOWN_USER;
-      }
-      if (!task.lastModifiedBy) {
-        task.lastModifiedBy = task.createdBy;
-      }
-      if (!task.labelIds) {
-        task.labelIds = [];
-      }
-      if (!task.priority) {
-        task.priority = "medium";
-      }
-      if (!task.checklist) {
-        task.checklist = [];
-      }
-      if (!task.relations) {
-        task.relations = [];
-      }
-    });
-
-    return next;
+    return normalizeBoard(board, this.getDefaultBoard());
   }
 
   private static async exists(uri: vscode.Uri): Promise<boolean> {
     try {
       await vscode.workspace.fs.stat(uri);
       return true;
-    } catch {
-      return false;
+    } catch (error) {
+      const code = (error as { code?: string }).code;
+      if (code === "ENOENT" || code === "FileNotFound") {return false;}
+      throw error;
     }
   }
 
   private static async readJson<T>(uri: vscode.Uri): Promise<T> {
     const fileData = await vscode.workspace.fs.readFile(uri);
     const raw = Buffer.from(fileData).toString("utf8");
+    this.readBaseline.set(uri.path.normalize("NFC"), raw);
+    this.readLocations.set(uri.path.normalize("NFC"), uri);
     try {
       return JSON.parse(raw) as T;
     } catch (error) {
@@ -197,16 +191,32 @@ export class DataManager {
   }
 
   private static async writeJsonAtomic(uri: vscode.Uri, value: unknown): Promise<void> {
+    // Preserve the existing filename even when its Unicode spelling differs
+    // from the equivalent ID (e.g. decomposed accents on macOS filesystems).
+    uri = this.readLocations.get(uri.path.normalize("NFC")) || uri;
     const parent = uri.with({ path: uri.path.replace(/\/[^/]+$/, "") });
+    const loaded = this.readBaseline.get(uri.path.normalize("NFC"));
+    if (loaded !== undefined && stableStringify(JSON.parse(loaded)) === stableStringify(value)) {return;}
+    let existing: string | undefined;
+    if (await this.exists(uri)) {
+      existing = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8");
+      const baseline = this.readBaseline.get(uri.path.normalize("NFC"));
+      if (baseline !== undefined && baseline !== existing) {
+        throw new Error(`The board file changed while saving: ${uri.path}. Reload and try again.`);
+      }
+      if (stableStringify(JSON.parse(existing)) === stableStringify(value)) {return;}
+    }
     await vscode.workspace.fs.createDirectory(parent);
-
-    const tempUri = vscode.Uri.joinPath(
-      parent,
-      `.${uri.path.split("/").pop()}.${Date.now()}.tmp`,
-    );
-    const data = Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8");
-    await vscode.workspace.fs.writeFile(tempUri, data);
-    await vscode.workspace.fs.rename(tempUri, uri, { overwrite: true });
+    const tempUri = vscode.Uri.joinPath(parent, `.${randomUUID()}.tmp`);
+    try {
+      await vscode.workspace.fs.writeFile(tempUri, Buffer.from(`${JSON.stringify(value, null, 2)}\n`, "utf8"));
+      const current = await this.exists(uri) ? Buffer.from(await vscode.workspace.fs.readFile(uri)).toString("utf8") : undefined;
+      if (current !== existing) {throw new Error(`The board file changed while saving: ${uri.path}. Reload and try again.`);}
+      await vscode.workspace.fs.rename(tempUri, uri, { overwrite: true });
+      this.readBaseline.set(uri.path.normalize("NFC"), `${JSON.stringify(value, null, 2)}\n`);
+    } finally {
+      if (await this.exists(tempUri)) {await vscode.workspace.fs.delete(tempUri);}
+    }
   }
 
   private static async backupCorruptJson(
@@ -235,15 +245,15 @@ export class DataManager {
 
     const entries = await vscode.workspace.fs.readDirectory(tasksUri);
     for (const [name, type] of entries) {
-      if (type !== vscode.FileType.File || !name.endsWith(".json")) {continue;}
-      try {
-        const task = await this.readJson<LynvoTask>(vscode.Uri.joinPath(tasksUri, name));
-        if (task.id) {
-          tasks[task.id] = task;
-        }
-      } catch (error) {
-        console.error(`Lynvo: invalid task file ${name}`, error);
+      if (!name.endsWith(".json")) {continue;}
+      if (type !== vscode.FileType.File) {
+        throw new Error(`Invalid task file ${name}: expected a regular JSON file. The board has been left untouched.`);
       }
+      const task = await this.readJson<LynvoTask>(vscode.Uri.joinPath(tasksUri, name));
+      if (!task || !isSafeEntityId(task.id) || `${task.id}.json`.normalize("NFC") !== name.normalize("NFC") || hasOwn(tasks, task.id)) {
+        throw new Error(`Invalid task file ${name}. The original has been left untouched.`);
+      }
+      tasks[task.id] = task;
     }
 
     return tasks;
@@ -260,17 +270,15 @@ export class DataManager {
 
     const entries = await vscode.workspace.fs.readDirectory(activityUri);
     for (const [name, type] of entries) {
-      if (type !== vscode.FileType.File || !name.endsWith(".json")) {continue;}
-      try {
-        const item = await this.readJson<LynvoActivity>(
-          vscode.Uri.joinPath(activityUri, name),
-        );
-        if (item.id) {
-          activity[item.id] = item;
-        }
-      } catch (error) {
-        console.error(`Lynvo: invalid activity file ${name}`, error);
+      if (!name.endsWith(".json")) {continue;}
+      if (type !== vscode.FileType.File) {
+        throw new Error(`Invalid activity file ${name}: expected a regular JSON file. The board has been left untouched.`);
       }
+      const item = await this.readJson<LynvoActivity>(vscode.Uri.joinPath(activityUri, name));
+      if (!item || !isSafeEntityId(item.id) || `${item.id}.json`.normalize("NFC") !== name.normalize("NFC") || hasOwn(activity, item.id)) {
+        throw new Error(`Invalid activity file ${name}. The original has been left untouched.`);
+      }
+      activity[item.id] = item;
     }
 
     return activity;
@@ -284,12 +292,7 @@ export class DataManager {
       return fallback;
     }
 
-    try {
-      return await this.readJson<T>(uri);
-    } catch (error) {
-      console.error(`Lynvo: invalid json ${uri.path}`, error);
-      return fallback;
-    }
+    return this.readJson<T>(uri);
   }
 
   private static async loadModularBoard(): Promise<LynvoBoard | null> {
@@ -301,6 +304,7 @@ export class DataManager {
     const syncUri = this.joinModularPath("metadata", "sync.json");
     const tombstonesUri = this.joinModularPath("metadata", "tombstones.json");
     const conflictsUri = this.joinModularPath("metadata", "conflicts.json");
+    const versionUri = this.joinModularPath("metadata", "version.json");
     if (
       !boardUri ||
       !columnsUri ||
@@ -309,15 +313,29 @@ export class DataManager {
       !activityUri ||
       !syncUri ||
       !tombstonesUri ||
-      !conflictsUri
+      !conflictsUri ||
+      !versionUri
     ) {return null;}
+    const root = this.getModularRootUri();
+    if (!root || !(await this.exists(root))) {return null;}
     if (!(await this.exists(boardUri)) || !(await this.exists(columnsUri))) {
-      return null;
+      throw new Error("Incomplete Lynvo board in .vscode/lynvo. Restore its missing files before editing.");
     }
 
     try {
+      if (await this.exists(versionUri)) {
+        const version = await this.readJson<{ schemaVersion?: unknown }>(versionUri);
+        if (!version || Array.isArray(version) || typeof version.schemaVersion !== "string" ||
+          (version.schemaVersion !== this.SCHEMA_VERSION && !/^[01]\.\d+\.\d+$/.test(version.schemaVersion))) {
+          throw new Error("Invalid or unsupported board schema metadata. The original files have been left untouched.");
+        }
+      }
       const metadata = await this.readJson<BoardMetadata>(boardUri);
       const columns = await this.readJson<Record<string, LynvoColumn>>(columnsUri);
+      if (!metadata || Array.isArray(metadata) || typeof metadata.version !== "string" ||
+        !columns || Array.isArray(columns) || !Object.keys(columns).length) {
+        throw new Error("Invalid board metadata or columns. The original files have been left untouched.");
+      }
       const users = await this.readOptionalJson<Record<string, LynvoPresenceUser>>(
         usersUri,
         {},
@@ -353,7 +371,7 @@ export class DataManager {
       vscode.window.showWarningMessage(
         "Lynvo no pudo leer la persistencia modular. Revisa .vscode/lynvo.",
       );
-      return null;
+      throw error;
     }
   }
 
@@ -369,7 +387,7 @@ export class DataManager {
       vscode.window.showWarningMessage(
         "Lynvo no pudo leer .vscode/lynvo.json. El archivo puede estar corrupto.",
       );
-      return null;
+      throw error;
     }
   }
 
@@ -419,7 +437,7 @@ export class DataManager {
     });
     await this.writeJsonAtomic(columnsUri, cleanBoard.columns);
     await this.writeJsonAtomic(usersUri, cleanBoard.users || {});
-    await this.writeJsonAtomic(settingsUri, {});
+    if (!(await this.exists(settingsUri))) {await this.writeJsonAtomic(settingsUri, {});}
     await this.writeJsonAtomic(syncUri, cleanBoard.sync || this.getDefaultSyncMetadata());
     await this.writeJsonAtomic(tombstonesUri, cleanBoard.tombstones || {});
     await this.writeJsonAtomic(conflictsUri, cleanBoard.conflicts || {});
@@ -429,7 +447,7 @@ export class DataManager {
 
     const expectedTaskFiles = new Set<string>();
     for (const task of Object.values(cleanBoard.tasks)) {
-      expectedTaskFiles.add(`${task.id}.json`);
+      expectedTaskFiles.add(`${task.id}.json`.normalize("NFC"));
       await this.writeJsonAtomic(vscode.Uri.joinPath(tasksUri, `${task.id}.json`), task);
     }
 
@@ -438,9 +456,13 @@ export class DataManager {
       if (
         type === vscode.FileType.File &&
         name.endsWith(".json") &&
-        !expectedTaskFiles.has(name)
+        !expectedTaskFiles.has(name.normalize("NFC")) &&
+        this.readBaseline.has(vscode.Uri.joinPath(tasksUri, name).path.normalize("NFC"))
       ) {
-        await vscode.workspace.fs.delete(vscode.Uri.joinPath(tasksUri, name));
+        const file = vscode.Uri.joinPath(tasksUri, name);
+        const raw = Buffer.from(await vscode.workspace.fs.readFile(file)).toString("utf8");
+        if (raw !== this.readBaseline.get(file.path.normalize("NFC"))) {throw new Error(`Task ${name} changed while deleting. Try again.`);}
+        await vscode.workspace.fs.delete(file);
       }
     }
 
@@ -449,7 +471,7 @@ export class DataManager {
       .sort((a, b) => b.createdAt - a.createdAt)
       .slice(0, 500);
     for (const activity of activityItems) {
-      expectedActivityFiles.add(`${activity.id}.json`);
+      expectedActivityFiles.add(`${activity.id}.json`.normalize("NFC"));
       await this.writeJsonAtomic(
         vscode.Uri.joinPath(activityUri, `${activity.id}.json`),
         activity,
@@ -461,9 +483,13 @@ export class DataManager {
       if (
         type === vscode.FileType.File &&
         name.endsWith(".json") &&
-        !expectedActivityFiles.has(name)
+        !expectedActivityFiles.has(name.normalize("NFC")) &&
+        this.readBaseline.has(vscode.Uri.joinPath(activityUri, name).path.normalize("NFC"))
       ) {
-        await vscode.workspace.fs.delete(vscode.Uri.joinPath(activityUri, name));
+        const file = vscode.Uri.joinPath(activityUri, name);
+        const raw = Buffer.from(await vscode.workspace.fs.readFile(file)).toString("utf8");
+        if (raw !== this.readBaseline.get(file.path.normalize("NFC"))) {throw new Error(`Activity ${name} changed while deleting. Try again.`);}
+        await vscode.workspace.fs.delete(file);
       }
     }
   }
@@ -504,13 +530,18 @@ export class DataManager {
     };
   }
 
+  private static touchTask(task: LynvoTask, actor?: LynvoTask["lastModifiedBy"]): void {
+    task.updatedAt = Math.max(Date.now(), task.updatedAt + 1);
+    if (actor) {task.lastModifiedBy = actor;}
+  }
+
   private static markPendingSync(board: LynvoBoard): void {
     board.sync = {
       ...this.getDefaultSyncMetadata(),
       ...(board.sync || {}),
-      status: "pending",
+      status: Object.values(board.conflicts || {}).some((conflict) => !conflict.resolved) ? "conflict" : "pending",
       pendingChanges: true,
-      message: "Local changes pending sync",
+      message: Object.values(board.conflicts || {}).some((conflict) => !conflict.resolved) ? "Unresolved conflicts" : "Local changes pending sync",
       updatedAt: Date.now(),
     };
   }
@@ -518,19 +549,28 @@ export class DataManager {
   private static async mutateBoard(
     mutator: (board: LynvoBoard) => Promise<void> | void,
   ): Promise<void> {
-    const run = this.writeQueue.catch(() => undefined).then(async () => {
+    return this.enqueue(async () => {
       const board = await this.loadBoardUnsafe();
-      if (!board) {return;}
+      if (!board) {throw new Error("Lynvo board not found. Open a project board first.");}
+      const before = stableStringify(board);
       await mutator(board);
+      if (stableStringify(board) === before) {return;}
+      // Keep displayed alternatives current after a local edit, so a pending
+      // click against an earlier conflict version cannot discard that edit.
+      for (const conflict of Object.values(board.conflicts || {})) {
+        if (conflict.resolved) {continue;}
+        const entity = conflict.entityType === "task" ? board.tasks[conflict.entityId]
+          : conflict.entityType === "column" ? board.columns[conflict.entityId] : board.labels?.[conflict.entityId];
+        if (!entity) {continue;}
+        const value = (entity as unknown as Record<string, LynvoConflict["localValue"]>)[conflict.field] ?? null;
+        if (stableStringify(value) !== stableStringify(conflict.localValue)) {
+          conflict.localValue = cloneBoardValue(value);
+          conflict.createdAt = Math.max(Date.now(), conflict.createdAt + 1);
+        }
+      }
       this.markPendingSync(board);
       await this.saveBoardUnsafe(board);
     });
-
-    this.writeQueue = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
   }
 
   private static async loadBoardUnsafe(): Promise<LynvoBoard | null> {
@@ -547,73 +587,75 @@ export class DataManager {
   }
 
   public static async initializeBoard(): Promise<void> {
-    const folderUri = this.getFolderUri();
-    if (!folderUri) {return;}
-
-    await vscode.workspace.fs.createDirectory(folderUri);
-    const board = await this.loadBoardUnsafe();
-    await this.saveBoard(board || this.getDefaultBoard());
+    return this.enqueue(async () => {
+      const folderUri = this.getFolderUri();
+      if (!folderUri) {return;}
+      await vscode.workspace.fs.createDirectory(folderUri);
+      const board = await this.loadBoardUnsafe();
+      if (!board) {await this.saveBoardUnsafe(this.getDefaultBoard());}
+    });
   }
 
   public static async loadBoard(): Promise<LynvoBoard | null> {
-    return this.loadBoardUnsafe();
+    return this.enqueue(() => this.loadBoardUnsafe());
   }
 
   public static async saveBoard(board: LynvoBoard): Promise<void> {
-    const run = this.writeQueue
-      .catch(() => undefined)
-      .then(() => this.saveBoardUnsafe(board));
-    this.writeQueue = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
-  }
-
-  public static async updateSyncMetadata(
-    updates: Partial<LynvoSyncMetadata>,
-  ): Promise<void> {
-    const run = this.writeQueue.catch(() => undefined).then(async () => {
-      const board = await this.loadBoardUnsafe();
-      if (!board) {return;}
-      board.sync = {
-        ...this.getDefaultSyncMetadata(),
-        ...(board.sync || {}),
-        ...updates,
-        updatedAt: Date.now(),
-      };
+    return this.enqueue(async () => {
+      await this.loadModularBoard();
       await this.saveBoardUnsafe(board);
     });
-    this.writeQueue = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
+  }
+
+  public static async reconcileBoard(
+    _baseSnapshot: LynvoBoard,
+    mergeLatest: (latest: LynvoBoard) => LynvoBoard,
+  ): Promise<LynvoBoard | null> {
+    return this.enqueue(async () => {
+      const latest = await this.loadBoardUnsafe();
+      if (!latest) {return null;}
+      const merged = this.ensureBoardIntegrity(mergeLatest(latest));
+      await this.saveBoardUnsafe(merged);
+      return merged;
+    });
+  }
+
+  public static async finishSync(
+    pushedSnapshot: LynvoBoard,
+    metadata: Partial<LynvoSyncMetadata>,
+  ): Promise<LynvoBoard | null> {
+    return this.enqueue(async () => {
+      const latest = await this.loadBoardUnsafe();
+      if (!latest) {return null;}
+      const pending = getBoardContentFingerprint(latest) !== getBoardContentFingerprint(pushedSnapshot);
+      const conflicts = Object.values(latest.conflicts || {}).some((conflict) => !conflict.resolved);
+      latest.sync = { ...this.getDefaultSyncMetadata(), ...latest.sync, ...metadata,
+        status: conflicts ? "conflict" : pending ? "pending" : "synced", pendingChanges: pending,
+        message: conflicts ? "Unresolved conflicts" : pending ? "Local changes pending sync" : "Synced", updatedAt: Date.now() };
+      await this.saveBoardUnsafe(latest);
+      return latest;
+    });
+  }
+
+  public static async updateSyncMetadata(updates: Partial<LynvoSyncMetadata>): Promise<void> {
+    return this.enqueue(async () => {
+      const board = await this.loadBoardUnsafe();
+      if (!board) {return;}
+      board.sync = { ...this.getDefaultSyncMetadata(), ...board.sync, ...updates, updatedAt: Date.now() };
+      await this.saveBoardUnsafe(board);
+    });
   }
 
   public static async touchCurrentUser(): Promise<void> {
-    const user = await AuthProvider.getGitHubUser();
-    if (!user) {
-      return;
-    }
-
-    const run = this.writeQueue.catch(() => undefined).then(async () => {
+    return this.enqueue(async () => {
+      const user = await AuthProvider.getGitHubUser();
+      if (!user) {return;}
       const board = await this.loadBoardUnsafe();
-      if (!board) {
-        return;
-      }
+      if (!board) {return;}
       board.users = board.users || {};
-      board.users[user.githubId] = {
-        ...user,
-        lastSeenAt: Date.now(),
-      };
+      board.users[user.githubId] = { ...user, lastSeenAt: Date.now() };
       await this.saveBoardUnsafe(board);
     });
-    this.writeQueue = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
   }
 
   public static async updateTaskStatus(
@@ -626,8 +668,7 @@ export class DataManager {
       const user = await AuthProvider.getGitHubUser();
       const previousStatus = board.tasks[taskId].status;
       board.tasks[taskId].status = newStatus;
-      board.tasks[taskId].updatedAt = Date.now();
-      if (user) {board.tasks[taskId].lastModifiedBy = user;}
+      this.touchTask(board.tasks[taskId], user);
       this.addActivity(
         board,
         "task_moved",
@@ -654,11 +695,12 @@ export class DataManager {
       updates.forEach((upd) => {
         if (!board.tasks[upd.id] || !board.columns[upd.status]) {return;}
 
-        board.tasks[upd.id].status = upd.status;
-        board.tasks[upd.id].position = upd.position;
-        if (upd.isDraggedTask) {
-          board.tasks[upd.id].updatedAt = Date.now();
-          if (user) {board.tasks[upd.id].lastModifiedBy = user;}
+        const task = board.tasks[upd.id];
+        const changed = task.status !== upd.status || task.position !== upd.position;
+        task.status = upd.status;
+        task.position = upd.position;
+        if (changed) {this.touchTask(task, user);}
+        if (upd.isDraggedTask && changed) {
           this.addActivity(
             board,
             "task_moved",
@@ -724,22 +766,27 @@ export class DataManager {
     labelIds: string[] = [],
     priority: LynvoTask["priority"] = "medium",
     dueDate?: number,
+    options: { expectedUpdatedAt?: number; checklist?: LynvoChecklistItem[]; relations?: LynvoTaskRelation[] } = {},
   ): Promise<void> {
     await this.mutateBoard(async (board) => {
-      if (!board.tasks[taskId]) {return;}
-
+      const task = board.tasks[taskId];
+      if (!task) {throw new Error("This task was deleted. Your draft has been preserved.");}
+      if (options.expectedUpdatedAt !== undefined && options.expectedUpdatedAt !== task.updatedAt) {
+        throw new Error("This task changed while you were editing it. Your draft has been preserved; reopen the latest task before saving.");
+      }
+      if (!title.trim()) {throw new Error("Task title cannot be empty.");}
       const user = await AuthProvider.getGitHubUser();
-      board.tasks[taskId].title = title;
-      board.tasks[taskId].description = description;
-      board.tasks[taskId].labelIds = labelIds;
-      board.tasks[taskId].priority = priority;
-      board.tasks[taskId].dueDate = dueDate;
-      board.tasks[taskId].updatedAt = Date.now();
-
-      if (user) {board.tasks[taskId].lastModifiedBy = user;}
-      this.addActivity(board, "task_updated", `Updated "${title}"`, user, {
-        taskId,
-      });
+      task.title = title.trim(); task.description = description; task.labelIds = labelIds;
+      task.priority = priority; task.dueDate = dueDate;
+      if (options.checklist !== undefined) {task.checklist = normalizeChecklist(options.checklist, task.updatedAt);}
+      if (options.relations !== undefined) {
+        task.relations = normalizeRelations(options.relations);
+        if (task.relations.some((relation) => relation.targetTaskId === taskId || !board.tasks[relation.targetTaskId])) {
+          throw new Error("A linked task no longer exists. Review the draft relations before saving.");
+        }
+      }
+      this.touchTask(task, user);
+      this.addActivity(board, "task_updated", `Updated "${task.title}"`, user, { taskId });
     });
   }
 
@@ -750,9 +797,9 @@ export class DataManager {
       this.addTombstone(board, "task", taskId, user);
       delete board.tasks[taskId];
       Object.values(board.tasks).forEach((task) => {
-        task.relations = (task.relations || []).filter(
-          (relation) => relation.targetTaskId !== taskId,
-        );
+        const previous = task.relations || [];
+        task.relations = previous.filter((relation) => relation.targetTaskId !== taskId);
+        if (task.relations.length !== previous.length) {this.touchTask(task, user);}
       });
       this.addActivity(board, "task_deleted", `Deleted "${taskTitle}"`, user, {
         taskId,
@@ -779,8 +826,7 @@ export class DataManager {
       };
 
       task.checklist = [...(task.checklist || []), item];
-      task.updatedAt = now;
-      if (user) {task.lastModifiedBy = user;}
+      this.touchTask(task, user);
       this.addActivity(board, "checklist_added", `Added checklist item to "${task.title}"`, user, {
         taskId,
       });
@@ -807,8 +853,7 @@ export class DataManager {
 
       const now = Date.now();
       item.updatedAt = now;
-      task.updatedAt = now;
-      if (user) {task.lastModifiedBy = user;}
+      this.touchTask(task, user);
       this.addActivity(
         board,
         "checklist_updated",
@@ -829,8 +874,7 @@ export class DataManager {
 
       const user = await AuthProvider.getGitHubUser();
       task.checklist = (task.checklist || []).filter((item) => item.id !== itemId);
-      task.updatedAt = Date.now();
-      if (user) {task.lastModifiedBy = user;}
+      this.touchTask(task, user);
       this.addActivity(board, "checklist_deleted", `Removed checklist item from "${task.title}"`, user, {
         taskId,
       });
@@ -862,8 +906,7 @@ export class DataManager {
       };
 
       task.relations = [...relations, relation];
-      task.updatedAt = Date.now();
-      if (user) {task.lastModifiedBy = user;}
+      this.touchTask(task, user);
       this.addActivity(
         board,
         "relation_added",
@@ -886,8 +929,7 @@ export class DataManager {
       task.relations = (task.relations || []).filter(
         (relation) => relation.id !== relationId,
       );
-      task.updatedAt = Date.now();
-      if (user) {task.lastModifiedBy = user;}
+      this.touchTask(task, user);
       this.addActivity(board, "relation_deleted", `Removed relation from "${task.title}"`, user, {
         taskId,
       });
@@ -897,42 +939,79 @@ export class DataManager {
   public static async resolveConflict(
     conflictId: string,
     resolution: "local" | "remote",
+    expected?: LynvoConflict,
   ): Promise<void> {
-    await this.mutateBoard((board) => {
-      const conflict = board.conflicts?.[conflictId];
-      if (!conflict || conflict.resolved) {return;}
+    await this.resolveConflicts([conflictId], resolution, expected ? { [conflictId]: expected } : undefined);
+  }
 
-      const task = board.tasks[conflict.entityId];
-      if (task && resolution === "remote") {
-        if (conflict.field === "dueDate") {
-          task.dueDate =
-            typeof conflict.remoteValue === "number" ? conflict.remoteValue : undefined;
-        } else if (conflict.field === "priority") {
-          task.priority =
-            conflict.remoteValue === "low" ||
-            conflict.remoteValue === "medium" ||
-            conflict.remoteValue === "high"
-              ? conflict.remoteValue
-              : "medium";
-        } else {
-          task[conflict.field] =
-            typeof conflict.remoteValue === "string" ? conflict.remoteValue : "";
+  public static async resolveConflicts(
+    conflictIds: string[],
+    resolution: "local" | "remote",
+    expected?: Record<string, LynvoConflict>,
+  ): Promise<void> {
+    await this.mutateBoard(async (board) => {
+      const ids = [...new Set(conflictIds)];
+      // Validate every displayed version before applying even the first value.
+      for (const id of ids) {
+        const current = board.conflicts?.[id];
+        if (expected) {
+          if (!expected[id] || !current || !conflictSnapshotMatches(current, expected[id])) {
+            throw new Error("The conflicts changed while you were reviewing them. Reload and review the latest values.");
+          }
         }
-        task.updatedAt = Date.now();
+        if (current && !current.resolved && resolution === "remote") {
+          const entity = current.entityType === "task" ? board.tasks[current.entityId]
+            : current.entityType === "column" ? board.columns[current.entityId] : board.labels?.[current.entityId];
+          const value = entity ? (entity as unknown as Record<string, unknown>)[current.field] ?? null : null;
+          if (entity && stableStringify(value) !== stableStringify(current.localValue)) {
+            throw new Error("A conflicting value changed after synchronization. Sync again and review its latest values before discarding it.");
+          }
+        }
       }
-
-      conflict.resolved = true;
-      const unresolved = Object.values(board.conflicts || {}).some(
-        (item) => !item.resolved,
-      );
-      board.sync = {
-        ...this.getDefaultSyncMetadata(),
-        ...(board.sync || {}),
-        status: unresolved ? "conflict" : "pending",
-        pendingChanges: true,
-        message: unresolved ? "Unresolved conflicts" : "Conflicts resolved",
-        updatedAt: Date.now(),
-      };
+      const user = await AuthProvider.getGitHubUser();
+      for (const id of ids) {
+        const conflict = board.conflicts?.[id];
+        if (!conflict || conflict.resolved) {continue;}
+        if (conflict.entityType === "task") {
+          const task = board.tasks[conflict.entityId];
+          if (task && resolution === "remote") {
+            const value = cloneBoardValue(conflict.remoteValue);
+            switch (conflict.field) {
+              case "dueDate": task.dueDate = typeof value === "number" && Number.isFinite(value) ? value : undefined; break;
+              case "position": task.position = typeof value === "number" && Number.isFinite(value) ? value : undefined; break;
+              case "priority": task.priority = value === "low" || value === "medium" || value === "high" ? value : "medium"; break;
+              case "checklist": task.checklist = normalizeChecklist(value, task.updatedAt); break;
+              case "relations": task.relations = normalizeRelations(value); break;
+              case "labelIds": task.labelIds = Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : []; break;
+              case "codeReference":
+                if (value && !Array.isArray(value) && typeof value === "object" && "filePath" in value) {task.codeReference = value;}
+                else {task.codeReference = undefined;}
+                break;
+              case "title": case "description": case "status": task[conflict.field] = typeof value === "string" ? value : ""; break;
+              default: throw new Error("Unsupported task conflict field.");
+            }
+            this.touchTask(task, user);
+          }
+        } else if (conflict.entityType === "column") {
+          const column = board.columns[conflict.entityId];
+          if (column && resolution === "remote") {
+            if (conflict.field === "position") {column.position = typeof conflict.remoteValue === "number" ? conflict.remoteValue : column.position;}
+            else if (conflict.field === "title" || conflict.field === "color") {
+              if (typeof conflict.remoteValue !== "string") {throw new Error("Invalid column conflict value.");}
+              column[conflict.field] = conflict.remoteValue;
+            } else {throw new Error("Unsupported column conflict field.");}
+          }
+        } else if (conflict.entityType === "label") {
+          const label = board.labels?.[conflict.entityId];
+          if (label && resolution === "remote") {
+            if ((conflict.field !== "name" && conflict.field !== "color") || typeof conflict.remoteValue !== "string") {
+              throw new Error("Invalid label conflict value.");
+            }
+            label[conflict.field] = conflict.remoteValue;
+          }
+        }
+        conflict.resolved = true;
+      }
     });
   }
 
@@ -987,8 +1066,14 @@ export class DataManager {
 
       for (const taskId in board.tasks) {
         if (board.tasks[taskId].status === id) {
+          this.addTombstone(board, "task", taskId, user);
           delete board.tasks[taskId];
         }
+      }
+      for (const task of Object.values(board.tasks)) {
+        const previous = task.relations || [];
+        task.relations = previous.filter((relation) => Boolean(board.tasks[relation.targetTaskId]));
+        if (task.relations.length !== previous.length) {this.touchTask(task, user);}
       }
     });
   }
@@ -1027,7 +1112,9 @@ export class DataManager {
       delete board.labels[labelId];
 
       Object.values(board.tasks).forEach((task) => {
-        task.labelIds = (task.labelIds || []).filter((id) => id !== labelId);
+        const previous = task.labelIds || [];
+        task.labelIds = previous.filter((id) => id !== labelId);
+        if (task.labelIds.length !== previous.length) {this.touchTask(task, user);}
       });
       this.addActivity(board, "label_deleted", `Deleted label "${name}"`, user, {
         metadata: { labelId },

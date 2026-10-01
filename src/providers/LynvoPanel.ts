@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { DataManager } from "./DataManager";
 import { GitService } from "./GitService";
-import { LynvoTaskRelationType } from "../types";
+import { LynvoChecklistItem, LynvoConflict, LynvoTaskRelation, LynvoTaskRelationType } from "../types";
 
 type LynvoView =
   | "board"
@@ -65,7 +65,7 @@ const asCodeReference = (
 const isSafeWorkspaceRelativePath = (filePath: string): boolean =>
   !filePath.startsWith("/") &&
   !filePath.startsWith("\\") &&
-  !filePath.includes("..") &&
+  !filePath.split(/[\\/]/).some((segment) => segment === "..") &&
   !/^[a-zA-Z]:[\\/]/.test(filePath);
 
 const asTaskReorderUpdates = (
@@ -114,13 +114,50 @@ const asColumnReorderUpdates = (
   });
 };
 
+const asChecklist = (value: unknown): LynvoChecklistItem[] | undefined => {
+  if (value === undefined) {return undefined;}
+  if (!Array.isArray(value) || value.some((item) => !isRecord(item) || !asString(item.id) ||
+    typeof item.text !== "string" || typeof item.done !== "boolean" || asNumber(item.createdAt) === undefined || asNumber(item.updatedAt) === undefined)) {
+    throw new Error("Invalid checklist draft.");
+  }
+  return value as LynvoChecklistItem[];
+};
+
+const asRelations = (value: unknown): LynvoTaskRelation[] | undefined => {
+  if (value === undefined) {return undefined;}
+  if (!Array.isArray(value) || value.some((item) => !isRecord(item) || !asString(item.id) ||
+    !asRelationType(item.type) || !asString(item.targetTaskId) || asNumber(item.createdAt) === undefined)) {
+    throw new Error("Invalid relations draft.");
+  }
+  return value as LynvoTaskRelation[];
+};
+
+const asConflict = (value: unknown): LynvoConflict | undefined => {
+  if (value === undefined) {return undefined;}
+  if (!isRecord(value) || !asString(value.id) || !asString(value.entityId) ||
+    !["task", "column", "label"].includes(String(value.entityType)) || !asString(value.field) || asNumber(value.createdAt) === undefined || typeof value.resolved !== "boolean") {
+    throw new Error("Invalid conflict snapshot.");
+  }
+  return value as unknown as LynvoConflict;
+};
+
+const asConflicts = (value: unknown): Record<string, LynvoConflict> | undefined => {
+  if (value === undefined) {return undefined;}
+  if (!isRecord(value)) {throw new Error("Invalid conflict snapshots.");}
+  return Object.fromEntries(Object.entries(value).map(([id, conflict]) => [id, asConflict(conflict)!]));
+};
+
 export class LynvoPanel {
   public static currentPanel: LynvoPanel | undefined;
   private readonly _panel: vscode.WebviewPanel;
   private _disposables: vscode.Disposable[] = [];
+  private _requestedView: LynvoView | undefined;
+  private _webviewReady = false;
+  private _disposed = false;
 
-  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri) {
+  private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, initialView: LynvoView) {
     this._panel = panel;
+    this._requestedView = initialView;
     this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
     this._panel.webview.html = this._getWebviewContent(
       this._panel.webview,
@@ -135,10 +172,12 @@ export class LynvoPanel {
   ) {
     if (LynvoPanel.currentPanel) {
       LynvoPanel.currentPanel._panel.reveal(vscode.ViewColumn.One);
-      LynvoPanel.currentPanel._panel.webview.postMessage({
-        command: "switchView",
-        view: initialView,
-      });
+      LynvoPanel.currentPanel._requestedView = initialView;
+      void LynvoPanel.refreshData();
+      if (LynvoPanel.currentPanel._webviewReady) {
+        LynvoPanel.currentPanel._panel.webview.postMessage({ command: "switchView", view: initialView });
+        LynvoPanel.currentPanel._requestedView = undefined;
+      }
     } else {
       const panel = vscode.window.createWebviewPanel(
         "lynvoBoard",
@@ -146,37 +185,43 @@ export class LynvoPanel {
         vscode.ViewColumn.One,
         {
           enableScripts: true,
+          retainContextWhenHidden: true,
           localResourceRoots: [vscode.Uri.joinPath(extensionUri, "dist")],
         },
       );
-      LynvoPanel.currentPanel = new LynvoPanel(panel, extensionUri);
-      LynvoPanel.currentPanel._panel.webview.postMessage({
-        command: "switchView",
-        view: initialView,
-      });
+      LynvoPanel.currentPanel = new LynvoPanel(panel, extensionUri, initialView);
     }
   }
 
   public static async refreshData() {
     if (LynvoPanel.currentPanel) {
-      const board = await DataManager.loadBoard();
-      LynvoPanel.currentPanel._panel.webview.postMessage({
-        command: "loadData",
-        data: board,
-      });
+      const panel = LynvoPanel.currentPanel;
+      const workspaceUri = DataManager.getActiveWorkspaceUri();
+      const workspaceId = workspaceUri?.toString();
+      try {
+        const board = workspaceUri ? await DataManager.withWorkspace(workspaceUri, () => DataManager.loadBoard()) : await DataManager.loadBoard();
+        if (DataManager.getActiveWorkspaceUri()?.toString() !== workspaceId || LynvoPanel.currentPanel !== panel) {return;}
+        panel._panel.webview.postMessage({ command: "loadData", data: board, workspaceId });
+      } catch (error) {
+        if (DataManager.getActiveWorkspaceUri()?.toString() !== workspaceId || LynvoPanel.currentPanel !== panel) {return;}
+        panel._panel.webview.postMessage({ command: "operationComplete", operation: "refresh", requestId: "refresh", workspaceId,
+          error: error instanceof Error ? error.message : String(error) });
+      }
     }
   }
 
   private static async refreshDataAndScheduleSync() {
-    await LynvoPanel.refreshData();
     GitService.scheduleBoardSync(15000, (result) => {
       if (result.success) {
         LynvoPanel.refreshData();
       }
     });
+    await LynvoPanel.refreshData();
   }
 
   public dispose() {
+    if (this._disposed) {return;}
+    this._disposed = true;
     LynvoPanel.currentPanel = undefined;
     this._panel.dispose();
     while (this._disposables.length) {
@@ -192,10 +237,27 @@ export class LynvoPanel {
           return;
         }
 
+        const requestId = asString(message.requestId);
+        let errorDetail: string | undefined;
+        const originWorkspace = DataManager.getActiveWorkspaceUri();
+        try {
+        const messageWorkspaceId = asString(message.workspaceId);
+        if (messageWorkspaceId && messageWorkspaceId !== originWorkspace?.toString()) {
+          throw new Error("The active project changed. Wait for the board to refresh before making changes.");
+        }
+        const operation = async () => {
         switch (message.command) {
           case "requestData": {
+            this._webviewReady = true;
+            const workspaceId = DataManager.getWorkspaceUri()?.toString();
             const board = await DataManager.loadBoard();
-            webview.postMessage({ command: "loadData", data: board });
+            if (DataManager.getActiveWorkspaceUri()?.toString() === workspaceId) {
+              webview.postMessage({ command: "loadData", data: board, workspaceId });
+            } else {await LynvoPanel.refreshData();}
+            if (this._requestedView) {
+              webview.postMessage({ command: "switchView", view: this._requestedView });
+              this._requestedView = undefined;
+            }
             return;
           }
           case "updateTaskStatus": {
@@ -205,7 +267,7 @@ export class LynvoPanel {
               return;
             }
             await DataManager.updateTaskStatus(taskId, newStatus);
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "reorderTasks": {
@@ -214,7 +276,7 @@ export class LynvoPanel {
               return;
             }
             await DataManager.reorderTasks(updates);
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "createTask": {
@@ -231,14 +293,14 @@ export class LynvoPanel {
               asPriority(message.priority),
               asNumber(message.dueDate),
             );
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "editTask": {
             const taskId = asString(message.taskId);
             const title = asString(message.title);
-            if (!taskId || !title) {
-              return;
+            if (!taskId || !title?.trim()) {
+              throw new Error("Task title cannot be empty.");
             }
             await DataManager.editTask(
               taskId,
@@ -247,8 +309,13 @@ export class LynvoPanel {
               asStringArray(message.labelIds),
               asPriority(message.priority),
               asNumber(message.dueDate),
+              {
+                expectedUpdatedAt: asNumber(message.expectedUpdatedAt),
+                checklist: asChecklist(message.checklist),
+                relations: asRelations(message.relations),
+              },
             );
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "deleteTask": {
@@ -263,7 +330,7 @@ export class LynvoPanel {
             );
             if (confirmTask === "Delete") {
               await DataManager.deleteTask(taskId);
-              LynvoPanel.refreshDataAndScheduleSync();
+              await LynvoPanel.refreshDataAndScheduleSync();
             }
             return;
           }
@@ -276,7 +343,7 @@ export class LynvoPanel {
               title,
               asString(message.color) || "var(--vscode-charts-blue)",
             );
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "editColumn": {
@@ -290,7 +357,7 @@ export class LynvoPanel {
               title,
               asString(message.color) || "var(--vscode-charts-blue)",
             );
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "deleteColumn": {
@@ -305,7 +372,7 @@ export class LynvoPanel {
             );
             if (confirmCol === "Delete") {
               await DataManager.deleteColumn(colId);
-              LynvoPanel.refreshDataAndScheduleSync();
+              await LynvoPanel.refreshDataAndScheduleSync();
             }
             return;
           }
@@ -315,7 +382,7 @@ export class LynvoPanel {
               return;
             }
             await DataManager.reorderColumns(updates);
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "createLabel": {
@@ -327,7 +394,7 @@ export class LynvoPanel {
               name,
               asString(message.color) || "#f85149",
             );
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "deleteLabel": {
@@ -336,7 +403,7 @@ export class LynvoPanel {
               return;
             }
             await DataManager.deleteLabel(labelId);
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "addChecklistItem": {
@@ -346,7 +413,7 @@ export class LynvoPanel {
               return;
             }
             await DataManager.addChecklistItem(taskId, text);
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "updateChecklistItem": {
@@ -359,7 +426,7 @@ export class LynvoPanel {
               text: asString(message.text),
               done: asBoolean(message.done),
             });
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "deleteChecklistItem": {
@@ -369,7 +436,7 @@ export class LynvoPanel {
               return;
             }
             await DataManager.deleteChecklistItem(taskId, itemId);
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "addTaskRelation": {
@@ -384,7 +451,7 @@ export class LynvoPanel {
               targetTaskId,
               relationType,
             );
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "deleteTaskRelation": {
@@ -394,7 +461,7 @@ export class LynvoPanel {
               return;
             }
             await DataManager.deleteTaskRelation(taskId, relationId);
-            LynvoPanel.refreshDataAndScheduleSync();
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "resolveConflict": {
@@ -403,8 +470,18 @@ export class LynvoPanel {
             if (!conflictId || !resolution) {
               return;
             }
-            await DataManager.resolveConflict(conflictId, resolution);
-            LynvoPanel.refreshDataAndScheduleSync();
+            await DataManager.resolveConflict(conflictId, resolution, asConflict(message.expectedConflict));
+            await LynvoPanel.refreshDataAndScheduleSync();
+            return;
+          }
+          case "resolveConflicts": {
+            const conflictIds = asStringArray(message.conflictIds);
+            const resolution = asResolution(message.resolution);
+            if (!conflictIds?.length || !resolution) {
+              return;
+            }
+            await DataManager.resolveConflicts(conflictIds, resolution, asConflicts(message.expectedConflicts));
+            await LynvoPanel.refreshDataAndScheduleSync();
             return;
           }
           case "syncBoard": {
@@ -438,12 +515,12 @@ export class LynvoPanel {
             ) {
               return;
             }
-            const folders = vscode.workspace.workspaceFolders;
-            if (!folders || folders.length === 0) {
+            const workspaceUri = DataManager.getWorkspaceUri();
+            if (!workspaceUri) {
               return;
             }
 
-            const fileUri = vscode.Uri.joinPath(folders[0].uri, filePath);
+            const fileUri = vscode.Uri.joinPath(workspaceUri, filePath);
             const doc = await vscode.workspace.openTextDocument(fileUri);
             const editor = await vscode.window.showTextDocument(
               doc,
@@ -456,6 +533,29 @@ export class LynvoPanel {
               vscode.TextEditorRevealType.InCenter,
             );
             return;
+          }
+        }
+        };
+        if (originWorkspace) {await DataManager.withWorkspace(originWorkspace, operation);}
+        else {await operation();}
+        } catch (error) {
+          errorDetail = error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(`Lynvo could not complete the operation: ${errorDetail}`);
+          if (message.command === "requestData" && this._requestedView) {
+            webview.postMessage({ command: "switchView", view: this._requestedView });
+            this._requestedView = undefined;
+          }
+          if (!requestId) {
+            webview.postMessage({ command: "operationComplete", operation: message.command, requestId: "untracked", error: errorDetail });
+          }
+          // Roll back optimistic moves and refresh any newer values without losing editor drafts.
+          try { await LynvoPanel.refreshData(); } catch { /* Preserve the original error. */ }
+        } finally {
+          if (message.command === "resolveConflict" || message.command === "resolveConflicts") {
+            webview.postMessage({ command: "conflictResolutionComplete", ...(asString(message.workspaceId) ? { workspaceId: message.workspaceId } : {}), ...(errorDetail ? { error: errorDetail } : {}) });
+          }
+          if (requestId) {
+            webview.postMessage({ command: "operationComplete", requestId, operation: message.command, workspaceId: asString(message.workspaceId), error: errorDetail });
           }
         }
       },

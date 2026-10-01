@@ -32,7 +32,8 @@ assert.ok(pkg.publisher, "publisher is required for marketplace publishing");
 assert.ok(pkg.repository?.url, "repository url is required");
 assert.ok(pkg.icon?.endsWith(".png"), "marketplace icon should be PNG");
 assert.ok(exists(pkg.icon), `missing icon: ${pkg.icon}`);
-assert.ok(exists("media/lynvo-board-preview.png"), "missing marketplace preview image");
+assert.ok(exists("media/Lynvo-general.png"), "missing marketplace board preview image");
+assert.ok(exists("media/Lynvo-table.png"), "missing marketplace table preview image");
 assert.ok(exists("LICENSE"), "missing LICENSE");
 assert.ok(exists("README.md"), "missing README.md");
 assert.ok(exists("CHANGELOG.md"), "missing CHANGELOG.md");
@@ -51,7 +52,8 @@ assert.ok(size("dist/webview.js") > 1024, "webview bundle is unexpectedly small"
 
 const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
 assert.ok(!readme.includes("YOUR GIF"), "README still contains placeholder text");
-assert.ok(readme.includes("Shadow Branch Sync"), "README must document sync architecture");
+assert.match(readme, /Shadow branch/i, "README must document sync architecture");
+assert.ok(readme.includes("lynvo-sync"), "README must document the sync branch");
 assert.ok(readme.includes(".vscode/lynvo/"), "README must document modular persistence");
 
 console.log("Lynvo smoke checks passed.");

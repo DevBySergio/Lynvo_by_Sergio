@@ -12,23 +12,23 @@ Unlike other project management tools, **your data stays in your workspace**. No
 
 Manage your entire project without leaving VS Code:
 
-- **Dynamic columns** with drag-and-drop reordering
+- **Dynamic columns** with controls to add, edit, reorder, and delete workflow stages
 - **Priorities** (high / medium / low) with color-coded badges
-- **Labels** — create, edit, and filter by custom tags
+- **Labels** — create, delete, and filter by custom tags
 - **Due dates** with automatic overdue / soon / future state indicators
-- **Checklists** inside tasks with real-time toggling
+- **Checklists** inside tasks with real-time toggling, expandable previews, and a collapse control
 - **Task relations** — link tasks as related, blocking, blocked by, or duplicates
-- **Markdown descriptions** with full syntax support (lists, code blocks, links, quotes)
+- **Markdown descriptions** with a supported subset: lists, checkboxes, fenced code, inline code, links, and quotes
 
 ### 2. 📊 Multiple Project Views
 
 Six interconnected views to match how you work:
 
 - **Board** — Classic Kanban with inline editing, search, and filters
-- **Table** — Spreadsheet-like overview with sortable columns and a node-graph map mode
-- **Activity** — Chronological feed of every board change
+- **Table** — Spreadsheet-like overview ordered by last update, plus a map grouped by status, automatic framing, zoom/pan, and a Fit control for large boards
+- **Activity** — Chronological feed of the 500 most recent activity entries
 - **Insights** — Project metrics: total tasks, completion rate, overdue, stale, and in-progress counts
-- **Conflicts** — Visual diff resolution for sync field conflicts
+- **Conflicts** — Visual diff resolution for sync field conflicts, with Keep all to retain local values and Discard all to apply remote values
 - **Labels** — Centralized label creation and deletion
 
 ### 3. 🤖 AI Agent Integration
@@ -39,8 +39,9 @@ Lynvo is designed to work **with AI coding agents** (OpenCode, Claude Code, Clin
 - **Direct JSON access** — Board data is stored as individual JSON files in `.vscode/lynvo/`, so agents can operate on tasks without any API
 - **Real-time visibility** — Checklist toggles, status moves, and activity entries are written by agents in real time, visible instantly on the board
 - **Autonomous task management** — Agents can create implementation tasks with labels, priorities, due dates, code references, and relations
-- **File watcher** — Any direct file edit by an agent is picked up by the extension within ~250ms and the webview refreshes automatically
+- **File watcher** — Direct file edits trigger a debounced refresh after ~250ms; reads wait for extension writes to finish
 - **SKILL.md included** — A complete agent integration skill is bundled with the extension, providing full type definitions, ID generation, and workflow guidance
+- **Safe skill installation** — Existing project instructions and customized Lynvo skills are preserved. Shared instruction files receive a managed Lynvo block; unchanged owned content can be updated automatically. Each folder in a workspace is checked with its own installation setting
 
 > **Note for AI agents:** If Lynvo is installed in the workspace, check for `.vscode/lynvo/` and use the SKILL.md instructions to manage tasks on the board.
 
@@ -50,7 +51,7 @@ Collaborate without a central server:
 
 - **Shadow branch pattern** — All sync happens on a dedicated `lynvo-sync` branch, never touching `main` or feature branches
 - **Automatic sync** — Background sync every 120 seconds, plus a 15-second debounce after changes
-- **Conflict resolution** — Field-level conflicts are detected and surfaced in the Conflict Center UI
+- **Conflict resolution** — Changes merge against the last synchronized Git commit. Independent edits are combined; incompatible edits become conflicts for tasks, columns, and labels. Without a common base, differing values are retained for review
 - **Tombstone tracking** — Deleted entities are tracked to prevent resurrection during merges
 - **Presence indicators** — See who else is working on the board based on sync metadata
 - **Manual sync** — Trigger on demand with `Lynvo: Sync Team Board`
@@ -59,7 +60,8 @@ Collaborate without a central server:
 
 - **Zero external servers** — All data lives in `.vscode/lynvo/` inside your workspace
 - **Modular JSON files** — Tasks, columns, labels, activity, and metadata are stored as separate files for easy inspection and direct editing
-- **Atomic writes & corruption recovery** — Files are written to temp files first, then renamed; corrupt files are backed up automatically
+- **Validated, atomic file writes** — Changed files are written to temp files first, then renamed. Invalid data stops loading and saving, preserving the board for manual recovery; malformed JSON receives a corruption backup
+- **Existing boards stay modular** — Updates retain the `.vscode/lynvo/` paths and schema. A damaged modular board is never replaced automatically by a legacy or empty board
 - **Offline-first** — Work without internet; changes sync when the remote is reachable again
 
 ### 6. 🔗 Code-Integrated Tasks
@@ -86,6 +88,7 @@ Once installed, Lynvo appears in the Activity Bar. Open the Command Palette (`Ct
 | `Lynvo: Create Task from Selection` | Creates a task linked to selected code                  |
 | `Lynvo: Sync Team Board`            | Runs a manual shadow-branch sync                        |
 | `Lynvo: Connect GitHub`             | Stores your GitHub identity for authorship and presence |
+| `Lynvo: Install Agent Skills`       | Installs or updates owned Lynvo instructions safely      |
 
 ---
 

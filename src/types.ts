@@ -98,13 +98,17 @@ export interface LynvoTombstone {
   deletedBy: LynvoUser;
 }
 
+export type LynvoConflictValue = string | number | boolean | null | string[] |
+  LynvoChecklistItem[] | LynvoTaskRelation[] | CodeReference;
+
 export interface LynvoConflict {
   id: string;
-  entityType: "task";
+  entityType: "task" | "column" | "label";
   entityId: string;
-  field: "title" | "description" | "status" | "priority" | "dueDate";
-  localValue: string | number | null;
-  remoteValue: string | number | null;
+  field: "title" | "description" | "status" | "priority" | "dueDate" |
+    "checklist" | "relations" | "labelIds" | "codeReference" | "position" | "name" | "color";
+  localValue: LynvoConflictValue;
+  remoteValue: LynvoConflictValue;
   createdAt: number;
   resolved: boolean;
 }

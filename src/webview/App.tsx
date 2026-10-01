@@ -4,9 +4,13 @@ import {
   LynvoActivity,
   LynvoBoard,
   LynvoColumn,
+  LynvoChecklistItem,
+  LynvoConflict,
+  LynvoTaskRelation,
   LynvoTask,
   LynvoTaskRelationType,
 } from "../types";
+import { createMapLayout, fitMapBounds, MapBounds, MapNodePosition, mapNodeHeight, mapNodeWidth } from "./mapLayout";
 
 type WebviewOutboundMessage =
   | { command: "requestData" }
@@ -38,6 +42,9 @@ type WebviewOutboundMessage =
       labelIds: string[];
       priority: Priority;
       dueDate?: number;
+      expectedUpdatedAt?: number;
+      checklist?: LynvoChecklistItem[];
+      relations?: LynvoTaskRelation[];
     }
   | { command: "deleteTask"; taskId: string }
   | { command: "addChecklistItem"; taskId: string; text: string }
@@ -56,11 +63,14 @@ type WebviewOutboundMessage =
   | { command: "reorderColumns"; updates: Array<{ id: string; position: number }> }
   | { command: "createLabel"; name: string; color: string }
   | { command: "deleteLabel"; labelId: string }
-  | { command: "resolveConflict"; conflictId: string; resolution: "local" | "remote" }
+  | { command: "resolveConflict"; conflictId: string; resolution: "local" | "remote"; expectedConflict?: LynvoConflict }
+  | { command: "resolveConflicts"; conflictIds: string[]; resolution: "local" | "remote"; expectedConflicts?: Record<string, LynvoConflict> }
   | { command: "openCode"; filePath: string; lineStart: number; lineEnd: number };
 
 declare const acquireVsCodeApi: () => {
-  postMessage: (msg: WebviewOutboundMessage) => void;
+  postMessage: (msg: WebviewOutboundMessage & { requestId?: string; workspaceId?: string }) => void;
+  getState?: () => unknown;
+  setState?: (state: unknown) => void;
 };
 const vscode = acquireVsCodeApi();
 
@@ -68,7 +78,6 @@ type LynvoView = "board" | "table" | "activity" | "conflicts" | "insights" | "la
 
 type Priority = "low" | "medium" | "high";
 type TableMode = "rows" | "map";
-type MapNodePosition = { x: number; y: number };
 type MapDragState = {
   taskId: string;
   offsetX: number;
@@ -83,15 +92,17 @@ type MapPanState = {
   startOffsetY: number;
 };
 
-const minMapZoom = 0.55;
+const minMapZoom = 0.01;
 const maxMapZoom = 1.85;
-const mapZoomStep = 0.15;
+const mapZoomFactor = 1.2;
 
 const clampMapZoom = (value: number): number =>
-  Math.max(minMapZoom, Math.min(maxMapZoom, Math.round(value * 100) / 100));
+  Math.max(minMapZoom, Math.min(maxMapZoom, value));
 
 type WebviewInboundMessage =
-  | { command: "loadData"; data: LynvoBoard | null }
+  | { command: "loadData"; data: LynvoBoard | null; workspaceId?: string }
+  | { command: "operationComplete"; requestId: string; operation: string; error?: string; workspaceId?: string }
+  | { command: "conflictResolutionComplete"; error?: string; workspaceId?: string }
   | { command: "switchView"; view: LynvoView };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -108,10 +119,16 @@ const isLynvoView = (value: unknown): value is LynvoView =>
 const parseInboundMessage = (value: unknown): WebviewInboundMessage | null => {
   if (!isRecord(value)) {return null;}
   if (value.command === "loadData") {
-    return { command: "loadData", data: (value.data as LynvoBoard | null) || null };
+    return { command: "loadData", data: (value.data as LynvoBoard | null) || null, workspaceId: typeof value.workspaceId === "string" ? value.workspaceId : undefined };
+  }
+  if (value.command === "operationComplete" && typeof value.requestId === "string" && typeof value.operation === "string") {
+    return { command: "operationComplete", requestId: value.requestId, operation: value.operation, error: typeof value.error === "string" ? value.error : undefined, workspaceId: typeof value.workspaceId === "string" ? value.workspaceId : undefined };
   }
   if (value.command === "switchView" && isLynvoView(value.view)) {
     return { command: "switchView", view: value.view };
+  }
+  if (value.command === "conflictResolutionComplete") {
+    return { command: "conflictResolutionComplete", error: typeof value.error === "string" ? value.error : undefined, workspaceId: typeof value.workspaceId === "string" ? value.workspaceId : undefined };
   }
   return null;
 };
@@ -165,35 +182,11 @@ const getReadableTextColor = (hexColor: string): string => {
   return luminance > 0.58 ? "#0d1117" : "#ffffff";
 };
 
-const getDueState = (task: LynvoTask): "none" | "future" | "soon" | "overdue" => {
-  if (!task.dueDate) {return "none";}
+const getDueState = (task: LynvoTask, completed = false): "none" | "future" | "soon" | "overdue" => {
+  if (completed || !task.dueDate) {return "none";}
   const now = Date.now();
   if (task.dueDate < now) {return "overdue";}
   return task.dueDate - now < 1000 * 60 * 60 * 24 * 3 ? "soon" : "future";
-};
-
-const hashTaskId = (taskId: string): number =>
-  taskId.split("").reduce((acc, char) => (acc * 31 + char.charCodeAt(0)) % 100000, 17);
-
-const getDefaultMapPosition = (
-  task: LynvoTask,
-  taskIndex: number,
-  columns: LynvoColumn[],
-  mapWidth: number,
-  mapHeight: number,
-): MapNodePosition => {
-  const hash = hashTaskId(task.id);
-  const columnIndex = Math.max(0, columns.findIndex((column) => column.id === task.status));
-  const columnRatio = columns.length <= 1 ? 0.5 : columnIndex / Math.max(columns.length - 1, 1);
-  const wave = Math.sin((hash % 360) * (Math.PI / 180));
-  const ring = 90 + (hash % 260);
-  const x = 160 + columnRatio * (mapWidth - 320) + wave * 80;
-  const y = mapHeight / 2 + Math.cos(taskIndex * 1.8 + hash) * ring;
-
-  return {
-    x: Math.max(90, Math.min(mapWidth - 90, x)),
-    y: Math.max(90, Math.min(mapHeight - 90, y)),
-  };
 };
 
 const sanitizeMarkdownHref = (href: string): string | null => {
@@ -312,12 +305,12 @@ const renderRichText = (text: string) => {
   return blocks;
 };
 
-const formatConflictValue = (value: string | number | null): string =>
-  value === null || value === undefined || value === "" ? "Empty" : String(value);
+const formatConflictValue = (value: unknown): string =>
+  value === null || value === undefined || value === "" ? "Empty" : typeof value === "object" ? JSON.stringify(value, null, 2) : String(value);
 
 const renderConflictDiff = (
-  localValue: string | number | null,
-  remoteValue: string | number | null,
+  localValue: unknown,
+  remoteValue: unknown,
 ) => {
   const localText = formatConflictValue(localValue);
   const remoteText = formatConflictValue(remoteValue);
@@ -681,21 +674,22 @@ const lynvoStyles = `
     min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-rows: minmax(0, 1fr);
     gap: 10px;
   }
 
   .lynvo-task-map {
     position: relative;
-    min-height: 520px;
+    min-width: 0;
+    min-height: 0;
     overflow: hidden;
     cursor: grab;
     user-select: none;
+    touch-action: none;
     border: 1px solid var(--lynvo-border);
     border-radius: var(--lynvo-radius);
     background:
-      radial-gradient(circle at center, rgba(88, 166, 255, 0.12), transparent 34%),
-      radial-gradient(circle at 70% 28%, rgba(63, 185, 80, 0.08), transparent 24%),
-      radial-gradient(circle at 28% 72%, rgba(210, 153, 34, 0.08), transparent 22%),
+      radial-gradient(circle, var(--lynvo-border) 1px, transparent 1px) 0 0 / 20px 20px,
       var(--lynvo-panel);
   }
 
@@ -710,17 +704,33 @@ const lynvoStyles = `
 
   .lynvo-task-map-zoom-surface {
     position: absolute;
-    inset: 0;
-    min-width: 100%;
-    min-height: 100%;
+    left: 0;
+    top: 0;
   }
 
   .lynvo-task-map-canvas {
     position: relative;
-    min-width: 100%;
-    min-height: 100%;
     transform-origin: 0 0;
-    transition: transform 120ms ease;
+  }
+
+  .lynvo-map-lane {
+    position: absolute;
+    border: 1px solid var(--lynvo-border);
+    border-top-width: 3px;
+    border-radius: 12px;
+    background: var(--lynvo-panel);
+    opacity: 0.9;
+    pointer-events: none;
+  }
+
+  .lynvo-map-lane-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 24px;
+    font-size: 13px;
+    font-weight: 700;
   }
 
   .lynvo-task-map-canvas svg {
@@ -733,30 +743,38 @@ const lynvoStyles = `
 
   .lynvo-map-node {
     position: absolute;
-    width: 118px;
-    height: 118px;
-    min-height: 118px;
-    padding: 14px;
-    border-radius: 999px;
+    width: ${mapNodeWidth}px;
+    height: ${mapNodeHeight}px;
+    min-height: ${mapNodeHeight}px;
+    padding: 10px 12px;
+    border: 1px solid var(--lynvo-border);
+    border-top-width: 3px;
+    border-radius: 8px;
+    background: var(--lynvo-card-bg);
+    color: var(--vscode-foreground);
     transform: translate(-50%, -50%);
-    display: grid;
-    place-items: center;
-    text-align: center;
-    font-size: 11px;
-    font-weight: 700;
-    line-height: 1.25;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: stretch;
+    text-align: left;
+    font-size: 12px;
+    line-height: 1.35;
     word-break: break-word;
     overflow: hidden;
     cursor: grab;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.18), 0 18px 36px rgba(0, 0, 0, 0.28);
-    transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.16);
+    transition: box-shadow 140ms ease, border-color 140ms ease;
     touch-action: none;
   }
 
   .lynvo-map-node:hover,
   .lynvo-map-node.selected {
-    transform: translate(-50%, -50%) scale(1.05);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.22), 0 20px 42px rgba(0, 0, 0, 0.38);
+    background: var(--lynvo-card-bg);
+    outline: 2px solid var(--vscode-focusBorder);
+    outline-offset: 2px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.22);
+    z-index: 1;
   }
 
   .lynvo-map-node:active {
@@ -769,21 +787,34 @@ const lynvoStyles = `
   }
 
   .lynvo-map-node.overdue {
-    opacity: 0.68;
-    box-shadow: 0 0 0 4px rgba(248, 81, 73, 0.22), 0 10px 24px rgba(0, 0, 0, 0.28);
+    border-right: 3px solid #f85149;
   }
 
   .lynvo-map-node.soon {
-    opacity: 0.86;
-    box-shadow: 0 0 0 4px rgba(210, 153, 34, 0.22), 0 10px 24px rgba(0, 0, 0, 0.28);
+    border-right: 3px solid #d29922;
+  }
+
+  .lynvo-map-node-title {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    font-weight: 600;
   }
 
   .lynvo-map-node small {
-    display: block;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
     margin-top: 4px;
-    font-size: 9px;
-    font-weight: 700;
-    opacity: 0.9;
+    font-size: 10px;
+    color: var(--vscode-descriptionForeground);
+  }
+
+  .lynvo-map-node small span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .lynvo-map-empty {
@@ -849,9 +880,26 @@ const lynvoStyles = `
 
     .lynvo-map-layout {
       grid-template-columns: 1fr;
+      grid-template-rows: minmax(0, 1fr) minmax(0, 140px);
     }
   }
 `;
+
+type PersistedEditor = {
+  workspaceId?: string;
+  editingTaskId: string | null;
+  editTitle: string;
+  editDesc: string;
+  editLabelIds: string[];
+  editPriority: Priority;
+  editDueDate: string;
+  editVersion?: number;
+  editChecklist: LynvoChecklistItem[];
+  editRelations: LynvoTaskRelation[];
+};
+const restoredState = vscode.getState?.();
+const restoredEditor = isRecord(restoredState) ? restoredState as Partial<PersistedEditor> : {};
+const draftId = () => `draft-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
 
 export const App: React.FC = () => {
   const [boardData, setBoardData] = useState<LynvoBoard | null>(null);
@@ -871,6 +919,8 @@ export const App: React.FC = () => {
   const [activityTypeFilter, setActivityTypeFilter] = useState<string>("");
   const [activityUserFilter, setActivityUserFilter] = useState<string>("");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isResolvingConflicts, setIsResolvingConflicts] = useState(false);
+  const [conflictResolutionError, setConflictResolutionError] = useState("");
 
   const [addingTaskColId, setAddingTaskColId] = useState<string | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState("");
@@ -879,12 +929,29 @@ export const App: React.FC = () => {
   const [newTaskPriority, setNewTaskPriority] = useState<Priority>("medium");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
 
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDesc, setEditDesc] = useState("");
-  const [editLabelIds, setEditLabelIds] = useState<string[]>([]);
-  const [editPriority, setEditPriority] = useState<Priority>("medium");
-  const [editDueDate, setEditDueDate] = useState("");
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(restoredEditor.editingTaskId || null);
+  const [editTitle, setEditTitle] = useState(typeof restoredEditor.editTitle === "string" ? restoredEditor.editTitle : "");
+  const [editDesc, setEditDesc] = useState(typeof restoredEditor.editDesc === "string" ? restoredEditor.editDesc : "");
+  const [editLabelIds, setEditLabelIds] = useState<string[]>(Array.isArray(restoredEditor.editLabelIds) ? restoredEditor.editLabelIds : []);
+  const [editPriority, setEditPriority] = useState<Priority>(restoredEditor.editPriority || "medium");
+  const [editDueDate, setEditDueDate] = useState(typeof restoredEditor.editDueDate === "string" ? restoredEditor.editDueDate : "");
+
+  const [editVersion, setEditVersion] = useState<number | undefined>(restoredEditor.editVersion);
+  const [editChecklist, setEditChecklist] = useState<LynvoChecklistItem[]>(restoredEditor.editChecklist || []);
+  const [editRelations, setEditRelations] = useState<LynvoTaskRelation[]>(restoredEditor.editRelations || []);
+  const [isSavingTask, setIsSavingTask] = useState(false);
+  const [operationError, setOperationError] = useState("");
+  const workspaceIdRef = useRef(restoredEditor.workspaceId);
+  const pendingRequestsRef = useRef(new Map<string, () => void>());
+  const taskSaveRequestRef = useRef<string | null>(null);
+  const sendMessage = (message: WebviewOutboundMessage, onSuccess?: () => void) => {
+    const requestId = draftId();
+    const workspaceId = workspaceIdRef.current;
+    if (onSuccess) {pendingRequestsRef.current.set(requestId, () => {if (workspaceIdRef.current === workspaceId) {onSuccess();}});}
+    setOperationError("");
+    if (message.command === "editTask" || message.command === "createTask") {taskSaveRequestRef.current = requestId;}
+    vscode.postMessage({ ...message, requestId, workspaceId });
+  };
 
   const [isAddingColumn, setIsAddingColumn] = useState(false);
   const [newColTitle, setNewColTitle] = useState("");
@@ -897,6 +964,7 @@ export const App: React.FC = () => {
   const [newLabelName, setNewLabelName] = useState("");
   const [newLabelColor, setNewLabelColor] = useState("#f85149");
   const [checklistDrafts, setChecklistDrafts] = useState<Record<string, string>>({});
+  const [expandedChecklists, setExpandedChecklists] = useState<Record<string, boolean>>({});
   const [relationTargetByTask, setRelationTargetByTask] = useState<Record<string, string>>({});
   const [relationTypeByTask, setRelationTypeByTask] = useState<
     Record<string, LynvoTaskRelationType>
@@ -907,6 +975,8 @@ export const App: React.FC = () => {
   const dragOverTaskRef = useRef<string | null>(null);
   const mapCanvasRef = useRef<HTMLDivElement | null>(null);
   const mapViewportRef = useRef<HTMLDivElement | null>(null);
+  const mapBoundsRef = useRef<MapBounds>({ x: 0, y: 0, width: 320, height: 320 });
+  const mapAutoFitRef = useRef(true);
   const mapDragRef = useRef<MapDragState | null>(null);
   const mapPanRef = useRef<MapPanState | null>(null);
   const suppressMapClickRef = useRef<string | null>(null);
@@ -920,14 +990,49 @@ export const App: React.FC = () => {
     const handleMessage = (event: MessageEvent) => {
       const message = parseInboundMessage(event.data);
       if (!message) {return;}
+      if ((message.command === "operationComplete" || message.command === "conflictResolutionComplete") && message.workspaceId && message.workspaceId !== workspaceIdRef.current) {return;}
 
       if (message.command === "loadData") {
+        if (message.workspaceId && workspaceIdRef.current && message.workspaceId !== workspaceIdRef.current) {
+          setEditingTaskId(null);
+          setIsSavingTask(false);
+          setIsResolvingConflicts(false);
+          setConflictResolutionError("");
+          pendingRequestsRef.current.clear();
+          taskSaveRequestRef.current = null;
+          setOperationError("");
+          setAddingTaskColId(null);
+          setEditingColId(null);
+          setIsAddingColumn(false);
+          setNewLabelName("");
+          setChecklistDrafts({});
+          setRelationTargetByTask({});
+          setRelationTypeByTask({});
+          setExpandedChecklists({});
+          setMapNodePositions({});
+          setSelectedMapTaskId(null);
+          setSearchTerm("");
+          setActiveFilterLabel("");
+          setActivePriorityFilter("");
+        }
+        workspaceIdRef.current = message.workspaceId;
         setBoardData(message.data);
-        setIsSyncing(false);
       }
 
+      if (message.command === "operationComplete") {
+        const complete = pendingRequestsRef.current.get(message.requestId);
+        pendingRequestsRef.current.delete(message.requestId);
+        if (message.error) {setOperationError(message.error);}
+        else {complete?.();}
+        if (message.requestId === taskSaveRequestRef.current) {setIsSavingTask(false); taskSaveRequestRef.current = null;}
+        if (message.operation === "syncBoard") {setIsSyncing(false);}
+      }
       if (message.command === "switchView") {
         setActiveView(message.view);
+      }
+      if (message.command === "conflictResolutionComplete") {
+        setIsResolvingConflicts(false);
+        setConflictResolutionError(message.error || "");
       }
     };
 
@@ -936,6 +1041,11 @@ export const App: React.FC = () => {
 
     return () => window.removeEventListener("message", handleMessage);
   }, []);
+
+  useEffect(() => {
+    vscode.setState?.({ workspaceId: workspaceIdRef.current, editingTaskId, editTitle, editDesc,
+      editLabelIds, editPriority, editDueDate, editVersion, editChecklist, editRelations });
+  }, [boardData, editingTaskId, editTitle, editDesc, editLabelIds, editPriority, editDueDate, editVersion, editChecklist, editRelations]);
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent) => {
@@ -955,8 +1065,9 @@ export const App: React.FC = () => {
       const rect = canvas.getBoundingClientRect();
       const pointerX = (event.clientX - rect.left) / mapZoom;
       const pointerY = (event.clientY - rect.top) / mapZoom;
-      const nextX = Math.max(70, Math.min(canvas.offsetWidth - 70, pointerX - drag.offsetX));
-      const nextY = Math.max(70, Math.min(canvas.offsetHeight - 70, pointerY - drag.offsetY));
+      const nextX = Math.max(mapNodeWidth / 2, Math.min(canvas.offsetWidth - mapNodeWidth / 2, pointerX - drag.offsetX));
+      const nextY = Math.max(mapNodeHeight / 2, Math.min(canvas.offsetHeight - mapNodeHeight / 2, pointerY - drag.offsetY));
+      mapAutoFitRef.current = false;
       drag.moved = true;
       setMapNodePositions((positions) => ({
         ...positions,
@@ -982,10 +1093,12 @@ export const App: React.FC = () => {
 
     window.addEventListener("pointermove", handlePointerMove);
     window.addEventListener("pointerup", handlePointerUp);
+    window.addEventListener("pointercancel", handlePointerUp);
 
     return () => {
       window.removeEventListener("pointermove", handlePointerMove);
       window.removeEventListener("pointerup", handlePointerUp);
+      window.removeEventListener("pointercancel", handlePointerUp);
     };
   }, [mapZoom]);
 
@@ -1019,6 +1132,43 @@ export const App: React.FC = () => {
         ),
     [activeFilterLabel, activePriorityFilter, searchTerm, tasks],
   );
+
+  const mapLayout = useMemo(() => createMapLayout(filteredTasks, sortedColumns), [filteredTasks, sortedColumns]);
+  const mapPositions = useMemo(() => new Map(mapLayout.tasks.map((task) => [
+    task.id, mapNodePositions[task.id] || mapLayout.positions.get(task.id)!,
+  ])), [mapLayout, mapNodePositions]);
+  const mapBounds = useMemo(() => {
+    let width = mapLayout.width;
+    let height = mapLayout.height;
+    for (const position of mapPositions.values()) {
+      width = Math.max(width, position.x + mapNodeWidth / 2 + 32);
+      height = Math.max(height, position.y + mapNodeHeight / 2 + 32);
+    }
+    return { x: 0, y: 0, width, height };
+  }, [mapLayout, mapPositions]);
+  mapBoundsRef.current = mapBounds;
+
+  // Reframe only on entry, filters, or membership changes, preserving the view
+  // while a task is dragged or an unrelated board refresh arrives.
+  const mapLayoutKey = useMemo(() => JSON.stringify([
+    mapLayout.lanes.map((lane) => lane.id),
+    mapLayout.tasks.map((task) => [task.id, task.status]),
+  ]), [mapLayout]);
+  useEffect(() => {
+    const viewport = mapViewportRef.current;
+    if (activeView !== "table" || tableMode !== "map" || !viewport) {return;}
+    mapAutoFitRef.current = true;
+    const fit = () => {
+      if (!mapAutoFitRef.current || !viewport.clientWidth || !viewport.clientHeight) {return;}
+      const view = fitMapBounds(mapBoundsRef.current, viewport.clientWidth, viewport.clientHeight);
+      setMapZoom(view.zoom);
+      setMapPanOffset(view.offset);
+    };
+    fit();
+    const observer = new ResizeObserver(fit);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [activeView, tableMode, mapLayoutKey]);
 
   const activityItems = useMemo(
     () =>
@@ -1071,16 +1221,16 @@ export const App: React.FC = () => {
       .sort((a, b) => b.lastSeenAt - a.lastSeenAt);
   }, [boardData]);
 
+  const doneColumnIds = useMemo(() => new Set(sortedColumns.filter((column) => column.id === "done" || (!boardData?.columns.done && column.title.toLowerCase().includes("done"))).map((column) => column.id)), [sortedColumns, boardData]);
+
   const metrics = useMemo(() => {
     const now = Date.now();
-    const doneIds = sortedColumns
-      .filter((col) => col.title.toLowerCase().includes("done"))
-      .map((col) => col.id);
+    const doneIds = [...doneColumnIds];
     const completed = tasks.filter((task) => doneIds.includes(task.status)).length;
     const overdue = tasks.filter(
       (task) => task.dueDate && task.dueDate < now && !doneIds.includes(task.status),
     ).length;
-    const stale = tasks.filter((task) => now - task.updatedAt > 1000 * 60 * 60 * 24 * 7).length;
+    const stale = tasks.filter((task) => !doneIds.includes(task.status) && now - task.updatedAt > 1000 * 60 * 60 * 24 * 7).length;
 
     return {
       total: tasks.length,
@@ -1088,18 +1238,13 @@ export const App: React.FC = () => {
       completionRate: tasks.length ? Math.round((completed / tasks.length) * 100) : 0,
       overdue,
       stale,
-      inProgress: tasks.filter((task) =>
-        sortedColumns
-          .find((col) => col.id === task.status)
-          ?.title.toLowerCase()
-          .includes("progress"),
-      ).length,
+      inProgress: tasks.filter((task) => task.status === "in-progress" || (!boardData?.columns["in-progress"] && Boolean(sortedColumns.find((col) => col.id === task.status)?.title.toLowerCase().includes("progress")))).length,
     };
-  }, [tasks, sortedColumns]);
+  }, [tasks, sortedColumns, boardData, doneColumnIds]);
 
   const triggerSync = () => {
     setIsSyncing(true);
-    vscode.postMessage({ command: "syncBoard" });
+    sendMessage({ command: "syncBoard" });
   };
 
   const handleDragStart = (e: React.DragEvent, task: LynvoTask) => {
@@ -1179,13 +1324,14 @@ export const App: React.FC = () => {
       };
     });
     setBoardData(nextBoard);
-    vscode.postMessage({ command: "reorderTasks", updates });
+    sendMessage({ command: "reorderTasks", updates });
     draggedTaskRef.current = null;
     draggedFromColumnRef.current = null;
     dragOverTaskRef.current = null;
   };
 
   const openAddTaskForm = (colId: string) => {
+    if (isSavingTask) {return;}
     setAddingTaskColId(colId);
     setNewTaskTitle("");
     setNewTaskDesc("");
@@ -1197,7 +1343,8 @@ export const App: React.FC = () => {
   const submitNewTask = () => {
     if (!newTaskTitle.trim() || !addingTaskColId) {return;}
 
-    vscode.postMessage({
+    setIsSavingTask(true);
+    sendMessage({
       command: "createTask",
       title: newTaskTitle.trim(),
       description: newTaskDesc,
@@ -1205,23 +1352,38 @@ export const App: React.FC = () => {
       labelIds: newTaskLabels,
       priority: newTaskPriority,
       dueDate: fromDateInputValue(newTaskDueDate),
-    });
-    setAddingTaskColId(null);
+    }, () => setAddingTaskColId(null));
   };
 
   const startEditingTask = (task: LynvoTask) => {
+    if (isSavingTask) {return;}
     setEditingTaskId(task.id);
     setEditTitle(task.title);
     setEditDesc(task.description);
     setEditLabelIds(task.labelIds || []);
     setEditPriority(getTaskPriority(task));
     setEditDueDate(toDateInputValue(task.dueDate));
+    setEditVersion(task.updatedAt);
+    setChecklistDrafts((drafts) => ({ ...drafts, [task.id]: "" }));
+    setRelationTargetByTask((targets) => ({ ...targets, [task.id]: "" }));
+    setEditChecklist((task.checklist || []).map((item) => ({ ...item })));
+    setEditRelations((task.relations || []).map((relation) => ({ ...relation })));
+  };
+
+  const cancelEditTask = () => {
+    if (isSavingTask) {return;}
+    if (editingTaskId) {
+      setChecklistDrafts((drafts) => ({ ...drafts, [editingTaskId]: "" }));
+      setRelationTargetByTask((targets) => ({ ...targets, [editingTaskId]: "" }));
+    }
+    setEditingTaskId(null);
   };
 
   const saveEditTask = () => {
     if (!editTitle.trim() || !editingTaskId) {return;}
 
-    vscode.postMessage({
+    setIsSavingTask(true);
+    sendMessage({
       command: "editTask",
       taskId: editingTaskId,
       title: editTitle.trim(),
@@ -1229,8 +1391,10 @@ export const App: React.FC = () => {
       labelIds: editLabelIds,
       priority: editPriority,
       dueDate: fromDateInputValue(editDueDate),
-    });
-    setEditingTaskId(null);
+      expectedUpdatedAt: editVersion,
+      checklist: editChecklist,
+      relations: editRelations,
+    }, () => setEditingTaskId(null));
   };
 
   const getChecklistProgress = (task: LynvoTask) => {
@@ -1243,7 +1407,10 @@ export const App: React.FC = () => {
     const text = checklistDrafts[taskId]?.trim();
     if (!text) {return;}
 
-    vscode.postMessage({ command: "addChecklistItem", taskId, text });
+    if (editingTaskId === taskId) {
+      const now = Date.now();
+      setEditChecklist((items) => [...items, { id: draftId(), text, done: false, createdAt: now, updatedAt: now }]);
+    } else {sendMessage({ command: "addChecklistItem", taskId, text });}
     setChecklistDrafts({ ...checklistDrafts, [taskId]: "" });
   };
 
@@ -1252,11 +1419,17 @@ export const App: React.FC = () => {
     const relationType = relationTypeByTask[taskId] || "related";
     if (!targetTaskId || targetTaskId === taskId) {return;}
 
-    createTaskRelation(taskId, targetTaskId, relationType);
+    if (editingTaskId === taskId) {
+      setEditRelations((relations) => relations.some((relation) => relation.targetTaskId === targetTaskId && relation.type === relationType) ? relations : [...relations, { id: draftId(), type: relationType, targetTaskId, createdAt: Date.now() }]);
+    } else {createTaskRelation(taskId, targetTaskId, relationType);}
     setRelationTargetByTask({ ...relationTargetByTask, [taskId]: "" });
   };
 
   const deleteTaskRelation = (taskId: string, relationId: string) => {
+    if (editingTaskId === taskId) {
+      setEditRelations((relations) => relations.filter((relation) => relation.id !== relationId));
+      return;
+    }
     if (!boardData) {return;}
     const task = boardData.tasks[taskId];
     if (!task) {return;}
@@ -1271,7 +1444,7 @@ export const App: React.FC = () => {
         },
       },
     });
-    vscode.postMessage({
+    sendMessage({
       command: "deleteTaskRelation",
       taskId,
       relationId,
@@ -1295,7 +1468,7 @@ export const App: React.FC = () => {
     );
     if (exists) {return;}
 
-    vscode.postMessage({
+    sendMessage({
       command: "addTaskRelation",
       taskId,
       targetTaskId,
@@ -1332,7 +1505,27 @@ export const App: React.FC = () => {
   };
 
   const updateMapZoom = (nextZoom: number) => {
-    setMapZoom(clampMapZoom(nextZoom));
+    const zoom = clampMapZoom(nextZoom);
+    const viewport = mapViewportRef.current;
+    mapAutoFitRef.current = false;
+    if (viewport) {
+      // Keep the point at the viewport center stationary when zooming.
+      const ratio = zoom / mapZoom;
+      setMapPanOffset((offset) => ({
+        x: viewport.clientWidth / 2 - (viewport.clientWidth / 2 - offset.x) * ratio,
+        y: viewport.clientHeight / 2 - (viewport.clientHeight / 2 - offset.y) * ratio,
+      }));
+    }
+    setMapZoom(zoom);
+  };
+
+  const fitMapToView = () => {
+    const viewport = mapViewportRef.current;
+    if (!viewport) {return;}
+    const view = fitMapBounds(mapBoundsRef.current, viewport.clientWidth, viewport.clientHeight);
+    mapAutoFitRef.current = true;
+    setMapZoom(view.zoom);
+    setMapPanOffset(view.offset);
   };
 
   const handleMapWheel = (event: React.WheelEvent<HTMLDivElement>) => {
@@ -1340,21 +1533,25 @@ export const App: React.FC = () => {
 
     event.preventDefault();
     const direction = event.deltaY > 0 ? -1 : 1;
-    updateMapZoom(mapZoom + direction * mapZoomStep);
+    updateMapZoom(direction > 0 ? mapZoom * mapZoomFactor : mapZoom / mapZoomFactor);
   };
 
   const handleMapKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "+" || event.key === "=") {
       event.preventDefault();
-      updateMapZoom(mapZoom + mapZoomStep);
+      updateMapZoom(mapZoom * mapZoomFactor);
     }
     if (event.key === "-" || event.key === "_") {
       event.preventDefault();
-      updateMapZoom(mapZoom - mapZoomStep);
+      updateMapZoom(mapZoom / mapZoomFactor);
     }
     if (event.key === "0") {
       event.preventDefault();
       updateMapZoom(1);
+    }
+    if (event.key.toLowerCase() === "f") {
+      event.preventDefault();
+      fitMapToView();
     }
   };
 
@@ -1368,6 +1565,7 @@ export const App: React.FC = () => {
       return;
     }
 
+    mapAutoFitRef.current = false;
     mapPanRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -1391,13 +1589,11 @@ export const App: React.FC = () => {
   const submitNewColumn = () => {
     if (!newColTitle.trim()) {return;}
 
-    vscode.postMessage({
+    sendMessage({
       command: "createColumn",
       title: newColTitle.trim(),
       color: newColColor,
-    });
-    setIsAddingColumn(false);
-    setNewColTitle("");
+    }, () => {setIsAddingColumn(false); setNewColTitle("");});
   };
 
   const startEditingColumn = (col: LynvoColumn) => {
@@ -1409,19 +1605,18 @@ export const App: React.FC = () => {
   const saveEditColumn = () => {
     if (!editColTitle.trim() || !editingColId) {return;}
 
-    vscode.postMessage({
+    sendMessage({
       command: "editColumn",
       colId: editingColId,
       title: editColTitle.trim(),
       color: editColColor,
-    });
-    setEditingColId(null);
+    }, () => setEditingColId(null));
   };
 
   const moveColumn = (colId: string, direction: "left" | "right") => {
     if (!boardData) {return;}
 
-    const cols = [...sortedColumns];
+    const cols = sortedColumns.map((column) => ({ ...column }));
     const idx = cols.findIndex((c) => c.id === colId);
     const swapIndex = direction === "left" ? idx - 1 : idx + 1;
 
@@ -1436,7 +1631,7 @@ export const App: React.FC = () => {
       ...boardData,
       columns: Object.fromEntries(cols.map((c) => [c.id, c])),
     });
-    vscode.postMessage({ command: "reorderColumns", updates });
+    sendMessage({ command: "reorderColumns", updates });
   };
 
   const getTasksByStatusFiltered = (status: string): LynvoTask[] => {
@@ -1484,9 +1679,10 @@ export const App: React.FC = () => {
     const isEdited = task.updatedAt - task.createdAt > 60000;
     const priority = getTaskPriority(task);
     const dueDate = task.dueDate;
-    const isOverdue = Boolean(dueDate && dueDate < Date.now());
+    const isOverdue = Boolean(dueDate && dueDate < Date.now() && !doneColumnIds.has(task.status));
     const checklistProgress = getChecklistProgress(task);
-    const availableRelationTargets = tasks.filter((candidate) => candidate.id !== task.id);
+    const isChecklistExpanded = Boolean(expandedChecklists[task.id]);
+    const availableRelationTargets = isEditing ? tasks.filter((candidate) => candidate.id !== task.id) : [];
 
     return (
       <div
@@ -1506,7 +1702,7 @@ export const App: React.FC = () => {
         style={{ opacity: isFiltering ? 0.9 : 1 }}
       >
         {isEditing ? (
-          <div>
+          <fieldset disabled={isSavingTask} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
             <input
               autoFocus
               value={editTitle}
@@ -1539,41 +1735,21 @@ export const App: React.FC = () => {
             {renderLabelSelector(editLabelIds, setEditLabelIds)}
             <div style={{ borderTop: "1px solid var(--vscode-widget-border)", paddingTop: "8px", marginTop: "8px" }}>
               <div style={{ fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>Checklist</div>
-              {(task.checklist || []).map((item) => (
+              {editChecklist.map((item) => (
                 <div key={item.id} style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "5px" }}>
                   <input
                     type="checkbox"
                     checked={item.done}
-                    onChange={(e) =>
-                      vscode.postMessage({
-                        command: "updateChecklistItem",
-                        taskId: task.id,
-                        itemId: item.id,
-                        done: e.target.checked,
-                      })
-                    }
+                    onChange={(e) => setEditChecklist((items) => items.map((entry) => entry.id === item.id ? { ...entry, done: e.target.checked, updatedAt: Date.now() } : entry))}
                   />
                   <input
-                    defaultValue={item.text}
-                    onBlur={(e) =>
-                      vscode.postMessage({
-                        command: "updateChecklistItem",
-                        taskId: task.id,
-                        itemId: item.id,
-                        text: e.target.value,
-                      })
-                    }
+                    value={item.text}
+                    onChange={(e) => setEditChecklist((items) => items.map((entry) => entry.id === item.id ? { ...entry, text: e.target.value, updatedAt: Date.now() } : entry))}
                     style={{ flex: 1, padding: "4px" }}
                   />
                   <button
                     className="icon-btn delete"
-                    onClick={() =>
-                      vscode.postMessage({
-                        command: "deleteChecklistItem",
-                        taskId: task.id,
-                        itemId: item.id,
-                      })
-                    }
+                    onClick={() => setEditChecklist((items) => items.filter((entry) => entry.id !== item.id))}
                   >
                     ×
                   </button>
@@ -1599,7 +1775,7 @@ export const App: React.FC = () => {
             </div>
             <div style={{ borderTop: "1px solid var(--vscode-widget-border)", paddingTop: "8px", marginTop: "8px" }}>
               <div style={{ fontSize: "11px", fontWeight: 700, marginBottom: "6px" }}>Relations</div>
-              {(task.relations || []).map((relation) => {
+              {editRelations.map((relation) => {
                 const target = boardData?.tasks[relation.targetTaskId];
                 return (
                   <div key={relation.id} style={{ display: "flex", gap: "6px", alignItems: "center", marginBottom: "5px" }}>
@@ -1656,8 +1832,9 @@ export const App: React.FC = () => {
               </div>
             </div>
             <div style={{ display: "flex", gap: "5px", justifyContent: "flex-end" }}>
-              <button onClick={() => setEditingTaskId(null)}>Cancel</button>
+              <button disabled={isSavingTask} onClick={cancelEditTask}>Cancel</button>
               <button
+                disabled={isSavingTask || !editTitle.trim()}
                 onClick={saveEditTask}
                 style={{
                   backgroundColor: "var(--vscode-button-background)",
@@ -1666,10 +1843,10 @@ export const App: React.FC = () => {
                   padding: "4px 8px",
                 }}
               >
-                Save
+                {isSavingTask ? "Saving…" : "Save"}
               </button>
             </div>
-          </div>
+          </fieldset>
         ) : (
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -1689,7 +1866,7 @@ export const App: React.FC = () => {
 	                </button>
                 <button
                   className="icon-btn delete"
-                  onClick={() => vscode.postMessage({ command: "deleteTask", taskId: task.id })}
+                  onClick={() => sendMessage({ command: "deleteTask", taskId: task.id })}
 	                >
 	                  D
 	                </button>
@@ -1775,7 +1952,7 @@ export const App: React.FC = () => {
             {task.codeReference && (
               <div
                 onClick={() =>
-                  vscode.postMessage({
+                  sendMessage({
                     command: "openCode",
                     filePath: task.codeReference!.filePath,
                     lineStart: task.codeReference!.lineStart,
@@ -1826,7 +2003,7 @@ export const App: React.FC = () => {
                     }}
                   />
                 </div>
-                {(task.checklist || []).slice(0, 3).map((item) => (
+                {(isChecklistExpanded ? task.checklist || [] : (task.checklist || []).slice(0, 3)).map((item) => (
                   <div
                     key={item.id}
                     style={{
@@ -1843,9 +2020,10 @@ export const App: React.FC = () => {
                   >
                     <input
                       type="checkbox"
+                      aria-label={item.text}
                       checked={item.done}
                       onChange={(e) =>
-                        vscode.postMessage({
+                        sendMessage({
                           command: "updateChecklistItem",
                           taskId: task.id,
                           itemId: item.id,
@@ -1853,15 +2031,24 @@ export const App: React.FC = () => {
                         })
                       }
                     />
-                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: isChecklistExpanded ? "normal" : "nowrap", overflowWrap: "anywhere" }}>
                       {item.text}
                     </span>
                   </div>
                 ))}
                 {(task.checklist || []).length > 3 && (
-                  <div style={{ fontSize: "10px", color: "var(--vscode-descriptionForeground)" }}>
-                    +{(task.checklist || []).length - 3} more
-                  </div>
+                  <button
+                    type="button"
+                    aria-expanded={isChecklistExpanded}
+                    aria-label={`${isChecklistExpanded ? "Collapse" : "Expand"} checklist for ${task.title}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setExpandedChecklists((expanded) => ({ ...expanded, [task.id]: !expanded[task.id] }));
+                    }}
+                    style={{ fontSize: "11px", padding: "2px 6px", marginTop: "3px", color: "var(--vscode-textLink-foreground)", background: "transparent" }}
+                  >
+                    {isChecklistExpanded ? "Show less" : `+${(task.checklist || []).length - 3} more`}
+                  </button>
                 )}
               </div>
             )}
@@ -1927,7 +2114,7 @@ export const App: React.FC = () => {
         <button
           onClick={() => {
             if (!newLabelName.trim()) {return;}
-            vscode.postMessage({ command: "createLabel", name: newLabelName.trim(), color: newLabelColor });
+            sendMessage({ command: "createLabel", name: newLabelName.trim(), color: newLabelColor });
             setNewLabelName("");
           }}
           style={{ padding: "6px 12px", backgroundColor: "var(--vscode-button-background)", color: "white", border: "none", cursor: "pointer" }}
@@ -1961,7 +2148,7 @@ export const App: React.FC = () => {
               </span>
               <button
                 className="icon-btn delete"
-                onClick={() => vscode.postMessage({ command: "deleteLabel", labelId: label.id })}
+                onClick={() => sendMessage({ command: "deleteLabel", labelId: label.id })}
               >
 	                Delete
               </button>
@@ -2065,24 +2252,10 @@ export const App: React.FC = () => {
   const renderTaskMapView = () => {
     if (!boardData) {return null;}
 
-    const mapTasks = [...filteredTasks].sort(
-      (a, b) =>
-        sortedColumns.findIndex((column) => column.id === a.status) -
-          sortedColumns.findIndex((column) => column.id === b.status) ||
-        (a.position ?? a.createdAt) - (b.position ?? b.createdAt),
-    );
-
-    const mapWidth = Math.max(1180, sortedColumns.length * 260 + 320);
-    const mapHeight = Math.max(720, Math.ceil(mapTasks.length / 3) * 190 + 260);
-    const nodePositions = new Map<string, MapNodePosition>();
-
-    mapTasks.forEach((task, taskIndex) => {
-      nodePositions.set(
-        task.id,
-        mapNodePositions[task.id] ||
-          getDefaultMapPosition(task, taskIndex, sortedColumns, mapWidth, mapHeight),
-      );
-    });
+    const mapTasks = mapLayout.tasks;
+    const mapWidth = mapBounds.width;
+    const mapHeight = mapBounds.height;
+    const nodePositions = mapPositions;
 
     const relationLines = mapTasks.flatMap((task) =>
       (task.relations || []).map((relation) => ({
@@ -2090,7 +2263,7 @@ export const App: React.FC = () => {
         source: task,
         target: boardData.tasks[relation.targetTaskId],
       })),
-    ).filter(({ target }) => Boolean(target));
+    ).filter(({ target }) => target && nodePositions.has(target.id));
 
     const selectedTask = selectedMapTaskId ? boardData.tasks[selectedMapTaskId] : null;
     const selectedColumn = selectedTask ? boardData.columns[selectedTask.status] : null;
@@ -2102,7 +2275,7 @@ export const App: React.FC = () => {
           <div style={{ color: "var(--vscode-descriptionForeground)", fontSize: "12px" }}>
             {isMapLinkMode && mapLinkSourceId
               ? `Choose a target for "${boardData.tasks[mapLinkSourceId]?.title || "task"}".`
-              : "Drag tasks freely. Select a task to inspect it."}
+              : `${mapTasks.length} tasks · ${relationLines.length} links. Drag to move; select to inspect.`}
           </div>
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
             <select
@@ -2142,15 +2315,18 @@ export const App: React.FC = () => {
               Cancel
             </button>
             <div className="lynvo-map-controls" aria-label="Map zoom controls">
-              <button onClick={() => updateMapZoom(mapZoom - mapZoomStep)} title="Zoom out">
+              <button onClick={() => updateMapZoom(mapZoom / mapZoomFactor)} title="Zoom out" aria-label="Zoom out">
                 -
               </button>
               <span className="lynvo-map-zoom-value">{Math.round(mapZoom * 100)}%</span>
-              <button onClick={() => updateMapZoom(mapZoom + mapZoomStep)} title="Zoom in">
+              <button onClick={() => updateMapZoom(mapZoom * mapZoomFactor)} title="Zoom in" aria-label="Zoom in">
                 +
               </button>
               <button onClick={() => updateMapZoom(1)} title="Reset zoom">
                 1:1
+              </button>
+              <button onClick={fitMapToView} title="Fit all visible tasks (F)">
+                Fit
               </button>
             </div>
           </div>
@@ -2163,7 +2339,7 @@ export const App: React.FC = () => {
             onWheel={handleMapWheel}
             onKeyDown={handleMapKeyDown}
             onPointerDown={handleMapBackgroundPointerDown}
-            title="Drag the background to move. Use Ctrl/Cmd + wheel or +, -, 0 to zoom"
+            title="Drag the background to move. Use Ctrl/Cmd + wheel or +, -, 0 to zoom; F to fit all tasks"
           >
             {mapTasks.length > 0 ? (
               <div
@@ -2183,6 +2359,17 @@ export const App: React.FC = () => {
                     transform: `scale(${mapZoom})`,
                   }}
                 >
+                  {mapLayout.lanes.map((lane) => (
+                    <div
+                      key={lane.id}
+                      className="lynvo-map-lane"
+                      style={{ left: lane.x, top: lane.y, width: lane.width, height: lane.height, borderTopColor: lane.color }}
+                    >
+                      <div className="lynvo-map-lane-title">
+                        <span>{lane.title}</span><span className="lynvo-count">{lane.count}</span>
+                      </div>
+                    </div>
+                  ))}
                   <svg viewBox={`0 0 ${mapWidth} ${mapHeight}`} preserveAspectRatio="none" aria-hidden="true">
                     {relationLines.map(({ relation, source, target }) => {
                       const from = nodePositions.get(source.id);
@@ -2190,17 +2377,18 @@ export const App: React.FC = () => {
                       if (!from || !to) {return null;}
 
                       const isBlocking = relation.type === "blocks" || relation.type === "blocked-by";
+                      const isHighlighted = source.id === selectedMapTaskId || target?.id === selectedMapTaskId;
+                      const bend = Math.max(40, Math.abs(to.x - from.x) / 2);
+                      const direction = to.x >= from.x ? 1 : -1;
                       return (
-                        <line
-                          key={relation.id}
-                          x1={from.x}
-                          y1={from.y}
-                          x2={to.x}
-                          y2={to.y}
+                        <path
+                          key={`${source.id}-${relation.id}`}
+                          d={`M ${from.x} ${from.y} C ${from.x + bend * direction} ${from.y}, ${to.x - bend * direction} ${to.y}, ${to.x} ${to.y}`}
+                          fill="none"
                           stroke={isBlocking ? "#f85149" : "var(--vscode-textLink-foreground)"}
                           strokeWidth={isBlocking ? 2.4 : 1.7}
                           strokeDasharray={relation.type === "related" ? "6 5" : undefined}
-                          opacity={0.72}
+                          opacity={isHighlighted ? 0.9 : selectedMapTaskId ? 0.08 : 0.25}
                           vectorEffect="non-scaling-stroke"
                         />
                       );
@@ -2210,17 +2398,18 @@ export const App: React.FC = () => {
                     const column = boardData.columns[task.status];
                     const position = nodePositions.get(task.id) || { x: mapWidth / 2, y: mapHeight / 2 };
                     const priority = getTaskPriority(task);
-                    const dueState = getDueState(task);
+                    const dueState = getDueState(task, doneColumnIds.has(task.status));
                     const isSelected = selectedMapTaskId === task.id;
                     const isLinkSource = isMapLinkMode && mapLinkSourceId === task.id;
-                    const borderWidth = priority === "high" ? 5 : priority === "medium" ? 4 : 3;
                     const relationCount = (task.relations || []).length;
 
                     return (
                       <button
                         key={task.id}
                         className={`lynvo-map-node ${dueState} ${isSelected ? "selected" : ""} ${isLinkSource ? "link-source" : ""}`}
+                        aria-pressed={isSelected}
                         onPointerDown={(event) => {
+                          if (event.button !== 0) {return;}
                           const target = event.currentTarget;
                           const canvas = mapCanvasRef.current;
                           if (!canvas) {return;}
@@ -2244,19 +2433,14 @@ export const App: React.FC = () => {
                         style={{
                           left: `${position.x}px`,
                           top: `${position.y}px`,
-                          background: column?.color || "var(--vscode-button-background)",
-                          border: `${borderWidth}px solid ${priorityColors[priority]}`,
-                          color: getReadableTextColor(column?.color || "#007acc"),
+                          borderTopColor: column?.color || "var(--vscode-charts-blue)",
                         }}
                       >
-                        <span>
-                          {task.title}
-                          <small>
-                            {column?.title || "No column"}
-                            {task.dueDate ? ` · ${new Date(task.dueDate).toLocaleDateString()}` : ""}
-                            {relationCount ? ` · ${relationCount} links` : ""}
-                          </small>
-                        </span>
+                        <span className="lynvo-map-node-title">{task.title}</span>
+                        <small>
+                          <span style={{ color: priorityColors[priority] }}>● {priority}</span>
+                          <span>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : relationCount ? `${relationCount} links` : column?.title || "No column"}</span>
+                        </small>
                       </button>
                     );
                   })}
@@ -2401,7 +2585,7 @@ export const App: React.FC = () => {
                         <select
                           value={task.status}
                           onChange={(e) =>
-                            vscode.postMessage({
+                            sendMessage({
                               command: "updateTaskStatus",
                               taskId: task.id,
                               newStatus: e.target.value,
@@ -2419,7 +2603,7 @@ export const App: React.FC = () => {
                       <td style={{ padding: "10px", verticalAlign: "top", color: priorityColors[getTaskPriority(task)], fontSize: "12px", fontWeight: 700 }}>
                         {getTaskPriority(task).toUpperCase()}
                       </td>
-                      <td style={{ padding: "10px", verticalAlign: "top", fontSize: "12px", color: task.dueDate && task.dueDate < Date.now() ? "#f85149" : "var(--vscode-foreground)" }}>
+                      <td style={{ padding: "10px", verticalAlign: "top", fontSize: "12px", color: task.dueDate && task.dueDate < Date.now() && !doneColumnIds.has(task.status) ? "#f85149" : "var(--vscode-foreground)" }}>
                         {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "—"}
                       </td>
                       <td style={{ padding: "10px", verticalAlign: "top", fontSize: "12px" }}>
@@ -2554,18 +2738,46 @@ export const App: React.FC = () => {
 
   const renderConflictsView = () => (
     <div style={{ flex: 1, overflowY: "auto", border: "1px solid var(--vscode-widget-border)", borderRadius: "8px", backgroundColor: "var(--vscode-editor-background)" }}>
+      <div style={{ position: "sticky", top: 0, zIndex: 1, display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", flexWrap: "wrap", padding: "12px 14px", background: "var(--lynvo-panel)", borderBottom: "1px solid var(--lynvo-border)" }}>
+        <span style={{ fontSize: "12px", color: "var(--vscode-descriptionForeground)" }}>
+          {unresolvedConflicts.length} unresolved conflicts
+        </span>
+        <div style={{ display: "flex", gap: "8px" }}>
+          {(["local", "remote"] as const).map((resolution) => (
+            <button
+              key={resolution}
+              disabled={!unresolvedConflicts.length || isResolvingConflicts}
+              title={resolution === "local" ? "Keep all local values" : "Discard all local conflicting values and use remote versions"}
+              onClick={() => {
+                setIsResolvingConflicts(true);
+                setConflictResolutionError("");
+                sendMessage({
+                  command: "resolveConflicts",
+                  conflictIds: unresolvedConflicts.map((conflict) => conflict.id),
+                  expectedConflicts: Object.fromEntries(unresolvedConflicts.map((conflict) => [conflict.id, conflict])),
+                  resolution,
+                });
+              }}
+            >
+              {resolution === "local" ? "Keep all" : "Discard all"}
+            </button>
+          ))}
+        </div>
+      </div>
+      {conflictResolutionError && <div role="alert" style={{ padding: "12px 14px", color: "var(--vscode-errorForeground)" }}>{conflictResolutionError}</div>}
       {unresolvedConflicts.length === 0 ? (
         <div style={{ padding: "28px", textAlign: "center", color: "var(--vscode-descriptionForeground)" }}>
           No unresolved conflicts.
         </div>
       ) : (
         unresolvedConflicts.map((conflict) => {
-          const task = boardData?.tasks[conflict.entityId];
+          const entity = conflict.entityType === "column" ? boardData?.columns[conflict.entityId] : conflict.entityType === "label" ? boardData?.labels?.[conflict.entityId] : boardData?.tasks[conflict.entityId];
+          const entityTitle = entity && ("title" in entity ? entity.title : "name" in entity ? entity.name : undefined);
           return (
             <div key={conflict.id} style={{ padding: "14px", borderBottom: "1px solid var(--vscode-widget-border)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", marginBottom: "8px" }}>
                 <div>
-                  <div style={{ fontWeight: 700 }}>{task?.title || conflict.entityId}</div>
+                  <div style={{ fontWeight: 700 }}>{entityTitle || conflict.entityId}</div>
                   <div style={{ fontSize: "11px", color: "var(--vscode-descriptionForeground)" }}>
                     Field: {conflict.field}
                   </div>
@@ -2587,24 +2799,32 @@ export const App: React.FC = () => {
 	              {renderConflictDiff(conflict.localValue, conflict.remoteValue)}
 	              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
                 <button
-                  onClick={() =>
-                    vscode.postMessage({
+                  disabled={isResolvingConflicts}
+                  onClick={() => {
+                    setIsResolvingConflicts(true);
+                    setConflictResolutionError("");
+                    sendMessage({
                       command: "resolveConflict",
                       conflictId: conflict.id,
+                      expectedConflict: conflict,
                       resolution: "local",
-                    })
-                  }
+                    });
+                  }}
                 >
                   Keep Local
                 </button>
                 <button
-                  onClick={() =>
-                    vscode.postMessage({
+                  disabled={isResolvingConflicts}
+                  onClick={() => {
+                    setIsResolvingConflicts(true);
+                    setConflictResolutionError("");
+                    sendMessage({
                       command: "resolveConflict",
                       conflictId: conflict.id,
+                      expectedConflict: conflict,
                       resolution: "remote",
-                    })
-                  }
+                    });
+                  }}
                   style={{ backgroundColor: "var(--vscode-button-background)", color: "white", border: "none" }}
                 >
                   Use Remote
@@ -2642,6 +2862,7 @@ export const App: React.FC = () => {
       </div>
 
       <div className="lynvo-toolbar">
+        {operationError && <div role="alert" style={{ gridColumn: "1 / -1", color: "var(--vscode-errorForeground)", whiteSpace: "pre-wrap" }}>{operationError}</div>}
         <div className="lynvo-nav">
           <div className="lynvo-brand">
             <span className="lynvo-brand-mark" aria-hidden="true" />
@@ -2766,7 +2987,7 @@ export const App: React.FC = () => {
 	                    </h3>
 	                    <div style={{ display: "flex", gap: "5px" }}>
                       <button className="icon-btn" onClick={() => startEditingColumn(col)}>E</button>
-                      <button className="icon-btn delete" onClick={() => vscode.postMessage({ command: "deleteColumn", colId: col.id })}>D</button>
+                      <button className="icon-btn delete" onClick={() => sendMessage({ command: "deleteColumn", colId: col.id })}>D</button>
                     </div>
                   </div>
                 )}
@@ -2785,8 +3006,8 @@ export const App: React.FC = () => {
                     </div>
                     {renderLabelSelector(newTaskLabels, setNewTaskLabels)}
                     <div style={{ display: "flex", gap: "5px" }}>
-                      <button onClick={() => setAddingTaskColId(null)} style={{ flex: 1 }}>Cancel</button>
-                      <button onClick={submitNewTask} style={{ flex: 1, backgroundColor: "var(--vscode-button-background)", color: "white", border: "none" }}>Save</button>
+                      <button disabled={isSavingTask} onClick={() => setAddingTaskColId(null)} style={{ flex: 1 }}>Cancel</button>
+                      <button disabled={isSavingTask || !newTaskTitle.trim()} onClick={submitNewTask} style={{ flex: 1, backgroundColor: "var(--vscode-button-background)", color: "white", border: "none" }}>Save</button>
                     </div>
                   </div>
                 ) : (

@@ -2,7 +2,7 @@
   "name": "lynvo",
   "displayName": "Lynvo - Project Board by Sergio",
   "description": "Professional Kanban board integrated with GitHub and your code.",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "publisher": "DevBySergio",
   "icon": "media/lynvo.png",
   "license": "MIT",
@@ -139,8 +139,10 @@
     "watch-tests": "tsc -p tsconfig.test.json -w --outDir out",
     "smoke": "node scripts/smoke-test.js",
     "pretest": "npm run typecheck && npm run lint && npm run compile-tests && npm run compile",
-    "test": "npm run smoke",
-    "check": "npm test && npm run package"
+    "test": "npm run regression && npm run smoke",
+    "regression": "node scripts/run-regressions.js",
+    "check": "npm test && npm run package",
+    "test:ui:browser": "node scripts/headless-ui-regression-test.js"
   },
   "devDependencies": {
     "@types/node": "18.x",

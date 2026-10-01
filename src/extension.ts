@@ -12,13 +12,20 @@ async function createTask(
    columnId: string | undefined,
    codeRef?: { filePath: string; lineStart: number; lineEnd: number }
 ): Promise<void> {
-   await DataManager.createTask(title.trim(), description, columnId, [], codeRef);
-   vscode.window.showInformationMessage("Task created in Lynvo.");
-   LynvoPanel.refreshData();
-   GitService.scheduleBoardSync();
+   const workspaceUri = DataManager.getWorkspaceUri();
+   const operation = async () => {
+     await DataManager.createTask(title.trim(), description, columnId, [], codeRef);
+     vscode.window.showInformationMessage("Task created in Lynvo.");
+     GitService.scheduleBoardSync();
+     await LynvoPanel.refreshData();
+   };
+   if (workspaceUri) {await DataManager.withWorkspace(workspaceUri, operation);}
+   else {await operation();}
 }
 
 async function quickCreateTask(): Promise<void> {
+   await prepareWorkspace(vscode.window.activeTextEditor?.document.uri);
+   const workspaceUri = DataManager.getWorkspaceUri();
    const board = await DataManager.loadBoard();
    if (!board) {
      vscode.window.showWarningMessage(
@@ -35,10 +42,11 @@ async function quickCreateTask(): Promise<void> {
    if (!title) {return;}
 
    const description =
-     (await vscode.window.showInputBox({
+     await vscode.window.showInputBox({
        prompt: "Description (optional)",
        placeHolder: "Brief context for the task...",
-     })) || "";
+     });
+   if (description === undefined) {return;}
 
    const sortedColumns = Object.values(board.columns).sort(
      (a, b) => a.position - b.position,
@@ -58,10 +66,17 @@ async function quickCreateTask(): Promise<void> {
 
    if (!selectedColumn) {return;}
 
+   if (workspaceUri) {DataManager.setWorkspaceUri(workspaceUri);}
    await createTask(title.trim(), description, selectedColumn.columnId);
 }
 
-export function activate(context: vscode.ExtensionContext) {
+async function prepareWorkspace(documentUri?: vscode.Uri): Promise<void> {
+  const folder = documentUri ? vscode.workspace.getWorkspaceFolder(documentUri) : undefined;
+  if (folder) {DataManager.setWorkspaceUri(folder.uri);}
+  await DataManager.initializeBoard();
+}
+
+export async function activate(context: vscode.ExtensionContext) {
   const lynvoMenuProvider = new LynvoMenuProvider();
   const treeDataRegistration = vscode.window.registerTreeDataProvider(
     "lynvo.sidebarMenu",
@@ -84,12 +99,13 @@ export function activate(context: vscode.ExtensionContext) {
   boardWatcher.onDidCreate(schedulePanelRefresh, null, context.subscriptions);
   boardWatcher.onDidDelete(schedulePanelRefresh, null, context.subscriptions);
 
-  DataManager.initializeBoard().catch((err) =>
-    console.error("Lynvo Init Error:", err),
-  );
-  DataManager.touchCurrentUser().catch((err) =>
-    console.error("Lynvo Presence Error:", err),
-  );
+  try {
+    await prepareWorkspace(vscode.window.activeTextEditor?.document.uri);
+    await DataManager.touchCurrentUser();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    vscode.window.showErrorMessage(`Lynvo could not initialize this board: ${detail}`);
+  }
 
   SkillInstaller.installAll(context.extensionUri, context, { silent: true }).then(
     (result) => {
@@ -156,37 +172,43 @@ export function activate(context: vscode.ExtensionContext) {
 
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("lynvo.openBoard", () => {
+    vscode.commands.registerCommand("lynvo.openBoard", async () => {
+      try {await prepareWorkspace(vscode.window.activeTextEditor?.document.uri);} catch (error) {vscode.window.showErrorMessage(String(error)); return;}
       LynvoPanel.render(context.extensionUri, "board");
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("lynvo.openInsights", () => {
+    vscode.commands.registerCommand("lynvo.openInsights", async () => {
+      try {await prepareWorkspace(vscode.window.activeTextEditor?.document.uri);} catch (error) {vscode.window.showErrorMessage(String(error)); return;}
       LynvoPanel.render(context.extensionUri, "insights");
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("lynvo.openTable", () => {
+    vscode.commands.registerCommand("lynvo.openTable", async () => {
+      try {await prepareWorkspace(vscode.window.activeTextEditor?.document.uri);} catch (error) {vscode.window.showErrorMessage(String(error)); return;}
       LynvoPanel.render(context.extensionUri, "table");
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("lynvo.openActivity", () => {
+    vscode.commands.registerCommand("lynvo.openActivity", async () => {
+      try {await prepareWorkspace(vscode.window.activeTextEditor?.document.uri);} catch (error) {vscode.window.showErrorMessage(String(error)); return;}
       LynvoPanel.render(context.extensionUri, "activity");
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("lynvo.openConflicts", () => {
+    vscode.commands.registerCommand("lynvo.openConflicts", async () => {
+      try {await prepareWorkspace(vscode.window.activeTextEditor?.document.uri);} catch (error) {vscode.window.showErrorMessage(String(error)); return;}
       LynvoPanel.render(context.extensionUri, "conflicts");
     }),
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("lynvo.openLabels", () => {
+    vscode.commands.registerCommand("lynvo.openLabels", async () => {
+      try {await prepareWorkspace(vscode.window.activeTextEditor?.document.uri);} catch (error) {vscode.window.showErrorMessage(String(error)); return;}
       LynvoPanel.render(context.extensionUri, "labels");
     }),
   );
@@ -213,7 +235,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("lynvo.quickCreateTask", async () => {
-      await quickCreateTask();
+      try {await quickCreateTask();} catch (error) {vscode.window.showErrorMessage(`Lynvo could not create the task: ${String(error)}`);}
     }),
   );
 
@@ -225,6 +247,12 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
+      const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
+      if (!folder) {
+        vscode.window.showErrorMessage("The selected file must belong to an open project folder.");
+        return;
+      }
+      try {await prepareWorkspace(editor.document.uri);} catch (error) {vscode.window.showErrorMessage(String(error)); return;}
       const selection = editor.selection;
       const text = editor.document.getText(selection).trim();
       if (!text) {
@@ -242,12 +270,15 @@ export function activate(context: vscode.ExtensionContext) {
       if (!title) {return;}
 
       const codeRef = {
-        filePath: vscode.workspace.asRelativePath(editor.document.uri),
+        filePath: vscode.workspace.asRelativePath(editor.document.uri, false),
         lineStart: selection.start.line + 1,
-        lineEnd: selection.end.line + 1,
+        lineEnd: selection.end.line + (selection.end.character === 0 && selection.end.line > selection.start.line ? 0 : 1),
       };
 
-       await createTask(title.trim(), text, undefined, codeRef);
+       try {
+         await prepareWorkspace(editor.document.uri);
+         await createTask(title.trim(), `\`\`\`${editor.document.languageId}\n${text}\n\`\`\``, undefined, codeRef);
+       } catch (error) {vscode.window.showErrorMessage(`Lynvo could not create the task: ${String(error)}`);}
     }),
   );
 

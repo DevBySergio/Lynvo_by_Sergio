@@ -189,15 +189,19 @@ interface LynvoTombstone {
 
 ```typescript
 interface LynvoConflict {
-  id: string;              // "task-{taskId}-{field}"
-  entityType: "task";
-  entityId: string;        // taskId
-  field: "title" | "description" | "status" | "priority" | "dueDate";
-  localValue: string | number | null;
-  remoteValue: string | number | null;
+  id: string;              // "{entityType}-{entityId}-{field}"
+  entityType: "task" | "column" | "label";
+  entityId: string;
+  field: "title" | "description" | "status" | "priority" | "dueDate" |
+    "checklist" | "relations" | "labelIds" | "codeReference" | "position" | "name" | "color";
+  localValue: LynvoConflictValue;
+  remoteValue: LynvoConflictValue;
   createdAt: number;
   resolved: boolean;
 }
+
+type LynvoConflictValue = string | number | boolean | null | string[] |
+  LynvoChecklistItem[] | LynvoTaskRelation[] | CodeReference;
 ```
 
 ### LynvoUser / LynvoPresenceUser
@@ -234,6 +238,7 @@ interface LynvoPresenceUser extends LynvoUser {
 ## ID Generation
 
 All IDs follow the pattern: `{prefix}-{base36timestamp}-{random8chars}`
+IDs must be safe filename components. Never use path separators, `.`/`..`, absolute paths, or control characters. Record keys and entity IDs must match.
 
 Generate them like this:
 - **Timestamp**: `Date.now().toString(36)`
@@ -366,7 +371,7 @@ Write to `.vscode/lynvo/activity/{activityId}.json`:
 
 #### Step 4: Mark sync pending
 
-After every direct JSON mutation, update `.vscode/lynvo/metadata/sync.json` while preserving any existing `lastSyncAt` and `lastRemoteCommit` values:
+After every direct JSON mutation, update `.vscode/lynvo/metadata/sync.json` while preserving any existing `lastSyncAt` and `lastRemoteCommit` values. Set `pendingChanges: true`; use `status: "conflict"` while unresolved conflicts remain, otherwise `status: "pending"`:
 
 ```json
 {
@@ -387,9 +392,9 @@ When VS Code commands are unavailable, follow these recipes exactly. Always read
 | Operation | Required direct edits |
 |---|---|
 | Move task | Update `tasks/{taskId}.json`: set `status` to an existing column id, update `position` if reordering, set `updatedAt`, set `lastModifiedBy`. Add `task_moved` activity with `metadata.from` and `metadata.to`. |
-| Reorder tasks | Update each affected task's `position`; update `updatedAt` and activity only for the dragged/primary task. Use numeric positions sorted within the destination column. |
+| Reorder tasks | Update each affected task's `position`, `updatedAt`, and `lastModifiedBy`; add activity for the dragged/primary task. Use numeric positions sorted within the destination column. |
 | Edit task | Update `title`, `description`, `labelIds`, `priority`, `dueDate`, `updatedAt`, and `lastModifiedBy`. Add `task_updated` activity. |
-| Delete task | Delete `tasks/{taskId}.json`, add `metadata/tombstones.json` entry `task-{taskId}`, remove relations in other tasks that target the deleted task, and add `task_deleted` activity. |
+| Delete task | Delete `tasks/{taskId}.json`, add `metadata/tombstones.json` entry `task-{taskId}`, remove relations in other tasks that target the deleted task and update their timestamps/actor, and add `task_deleted` activity. |
 | Add checklist item | Append a `LynvoChecklistItem` to `checklist`, update task timestamps/actor, and add `checklist_added` activity. |
 | Update checklist item | Modify only `text` and/or `done`, update item and task timestamps/actor, and add `checklist_updated` activity. |
 | Delete checklist item | Remove the checklist item, update task timestamps/actor, and add `checklist_deleted` activity. |
@@ -397,13 +402,13 @@ When VS Code commands are unavailable, follow these recipes exactly. Always read
 | Delete relation | Remove the relation from the source task by relation id, update task timestamps/actor, and add `relation_deleted` activity. |
 | Create column | Reuse an existing case-insensitive column title first. If creating, add a `col-*` entry to `columns.json` with deterministic `position` and add `column_created` activity. |
 | Create label | Reuse an existing case-insensitive label name first. If creating, add a `label-*` entry under `board.json.labels` and add `label_created` activity. |
-| Resolve conflict | Update the task field only when choosing or synthesizing a new value, set the conflict's `resolved` to `true`, update sync metadata to `conflict` if unresolved conflicts remain or `pending` if all are resolved. Do not invent an activity type for conflict resolution. |
+| Resolve conflict | Re-read and verify the conflict still matches the version reviewed. Update the supported task, column, or label field only when choosing or synthesizing a new value; mark the conflict `resolved`. Update task timestamps/actor when its value changes. Set sync metadata to `conflict` if unresolved conflicts remain or `pending` if all are resolved. Do not invent an activity type for conflict resolution. |
 
 ## Markdown Description Format
 
-Task descriptions support rich markdown rendered by the webview:
+Task descriptions support a Markdown subset rendered by the webview: bullet lists, checkboxes, quotes, fenced code, inline code, and links. This is not a full CommonMark renderer:
 
-```markdown
+````markdown
 - [ ] Unchecked checklist item
 - [x] Completed checklist item
 
@@ -418,7 +423,7 @@ code blocks with language hint
 ```
 
 [Link text](https://example.com) for external links
-```
+````
 
 **Security notes:**
 - Links are sanitized: only `http:`, `https:`, `mailto:`, and `#` anchors allowed
@@ -460,6 +465,8 @@ The webview calculates due date states for display:
 - **`soon`**: Due date is within the next 3 days
 - **`overdue`**: Task card display marks any past dueDate as overdue. Insights metrics exclude tasks in done-like columns from the overdue count.
 
+Insights recognizes the default `done` and `in-progress` column IDs even after their titles change. If a default ID is absent, the existing title-based recognition is used for that workflow category. Completed tasks are excluded from stale metrics as well as overdue metrics.
+
 ## Column and Label Stewardship
 
 Agents should keep the board taxonomy useful without creating noisy one-off structure.
@@ -487,10 +494,10 @@ Agents should keep the board taxonomy useful without creating noisy one-off stru
 1. **Shadow branch pattern**: All sync happens on a dedicated Git branch `lynvo-sync`
 2. **Temporary worktree**: A temporary Git worktree is created in the OS temp directory (`/tmp/lynvo-sync-*` on Linux, `/var/folders/...` on macOS) for merge operations
 3. **Isolation**: The `.vscode/lynvo/` folder is excluded from the active worktree via `.git/info/exclude`
-4. **Merge strategy**: Local and remote boards are merged per task; the task with newer `updatedAt` wins entirely. When the local task wins over an existing remote task with a different timestamp, differing fields are recorded as conflict entries instead of being auto-resolved.
-5. **Conflict detection**: Conflict records are created for differing task fields only in the local-wins path. Remote-newer tasks can win silently.
+4. **Merge strategy**: Use the last synchronized Git commit as the common base. Merge task, column, and label fields independently; combine independent changes and merge checklist/relation collections by item ID. Label membership is merged independently.
+5. **Conflict detection**: Incompatible concurrent edits produce field conflicts instead of replacing the whole task. Without a common base, incompatible differences are retained as conflicts for review. Edits made locally during sync remain pending until sent.
 6. **Tombstone handling**: Deleted entities are tracked to prevent resurrection during merges
-7. **Push retry**: Push is attempted twice with different ref specs before failing
+7. **Push retry**: A rejected concurrent push triggers fetch, merge, and a new commit before retrying, up to three attempts. Git operations have a timeout and active operations can be cancelled during extension disposal
 8. **Cleanup**: Temporary worktree is removed after sync completes
 
 ### Sync States
@@ -521,11 +528,11 @@ When conflicts are detected:
 
 ### Autonomous Conflict Resolution for Agents
 
-Agents may resolve conflicts directly when the user has asked for autonomous task management or when a conflict blocks progress. Resolve only unresolved `entityType: "task"` conflicts with supported fields (`title`, `description`, `status`, `priority`, `dueDate`). Leave unknown conflict shapes untouched.
+Agents may resolve conflicts directly when the user has asked for autonomous task management or when a conflict blocks progress. The policies below cover unresolved task conflicts for `title`, `description`, `status`, `priority`, and `dueDate`. For collection fields or column/label conflicts, retain both sides for user review unless the user has provided a policy; never discard unknown conflict shapes.
 
 Resolution procedure:
 
-1. Read `metadata/conflicts.json`, `columns.json`, and the affected task file.
+1. Read `metadata/conflicts.json`, `columns.json`, and the affected task file. Re-read before saving and stop if the conflict changed since review.
 2. For each unresolved conflict, choose a value using the field policy below.
 3. Apply the chosen value to the task only when it differs from the current task value.
 4. Set `conflict.resolved = true`.
@@ -565,7 +572,7 @@ The extension provides 6 views accessible via the toolbar tabs:
 | View | Purpose |
 |---|---|
 | `board` | Kanban board with drag-and-drop, inline editing, checklists, relations |
-| `table` | Spreadsheet-like task overview with sortable columns |
+| `table` | Spreadsheet-like task overview ordered by last update, plus a relation map |
 | `activity` | Chronological feed of all board changes |
 | `conflicts` | Sync conflict resolution UI with diff view |
 | `insights` | Project metrics (total, completed, rate, overdue, stale, in-progress) |
@@ -574,16 +581,18 @@ The extension provides 6 views accessible via the toolbar tabs:
 ### Board View Features
 - Drag-and-drop tasks between columns
 - Inline task editing (title, description, labels, priority, due date)
+- Editor checklist and relation changes stay in the draft until Save; Cancel abandons them with the other fields. Save failures keep the editor open, and a newer task version rejects an old draft
 - Checklist management (add, toggle, edit, delete items)
 - Task relations management (add/remove relations with type selector)
-- Column management (add, edit, reorder, delete)
+- Column management (add, edit, reorder with buttons, delete)
 - Search and filter by label or priority
 - Task card shows: title, priority badge, labels, checklist progress, due date indicator, code reference indicator
 
 ### Table View Features
 - Two modes: `rows` (spreadsheet) and `map` (node graph)
-- Row mode: sortable columns for all task fields
-- Map mode: draggable circular nodes with zoom/pan, relation lines, side panel for details
+- Row mode: tasks ordered by `updatedAt` descending; headers do not change the sort order
+- Map mode: draggable cards grouped by status, automatic framing and Fit, zoom/pan, relation lines, side panel for details. Layout and checklist expansion remain in webview state only.
+- Hiding the panel retains its UI context. Editor drafts are also saved to VS Code webview state if VS Code recreates the same webview, and cleared when switching workspaces; task files do not store UI state. Closing the panel explicitly or restarting VS Code is not a supported draft-restoration path.
 
 ## VS Code Commands Reference
 
@@ -612,7 +621,7 @@ The extension provides 6 views accessible via the toolbar tabs:
 | `updateTaskStatus` | `{ taskId, newStatus }` |
 | `reorderTasks` | `{ updates: [{ id, status, position, isDraggedTask? }] }` |
 | `createTask` | `{ title, description, targetColId, labelIds, priority, dueDate?, codeReference? }` |
-| `editTask` | `{ taskId, title, description, labelIds, priority, dueDate? }` |
+| `editTask` | `{ taskId, title, description, labelIds, priority, dueDate?, expectedUpdatedAt?, checklist?, relations? }` — pass the reviewed task timestamp to reject a stale draft |
 | `deleteTask` | `{ taskId }` |
 | `addChecklistItem` | `{ taskId, text }` |
 | `updateChecklistItem` | `{ taskId, itemId, text?, done? }` |
@@ -625,36 +634,42 @@ The extension provides 6 views accessible via the toolbar tabs:
 | `reorderColumns` | `{ updates: [{ id, position }] }` |
 | `createLabel` | `{ name, color }` |
 | `deleteLabel` | `{ labelId }` |
-| `resolveConflict` | `{ conflictId, resolution: "local" | "remote" }` |
+| `resolveConflict` | `{ conflictId, resolution: "local" | "remote", expectedConflict? }` — include the reviewed conflict snapshot |
+| `resolveConflicts` | `{ conflictIds: string[], resolution: "local" | "remote", expectedConflicts? }` — one queued save; include reviewed snapshots keyed by ID. Local retains current values, remote applies the reviewed remote values |
 | `openCode` | `{ filePath, lineStart, lineEnd }` |
 
 ### Inbound Messages (extension → webview)
 
 | Command | Payload |
 |---|---|
-| `loadData` | `{ data: LynvoBoard | null }` |
+| `loadData` | `{ data: LynvoBoard | null, workspaceId? }` |
 | `switchView` | `{ view: "board" | "table" | "activity" | "conflicts" | "insights" | "labels" }` |
+| `conflictResolutionComplete` | `{ error?: string }` — bulk resolution finished; restores the controls and reports a write failure if present |
+| `operationComplete` | `{ requestId, operation, error? }` — completes an outbound message carrying `requestId`; editors close only after a successful save |
 
 ## File Watcher
 
-The extension watches `**/.vscode/lynvo/**/*.json` for changes and refreshes the webview automatically. This means any direct file edits will be picked up within ~250ms.
+The extension watches `**/.vscode/lynvo/**/*.json` for changes and refreshes the webview after a ~250ms debounce. Reads wait for extension writes to finish. Direct agents should still use atomic writes and avoid simultaneous edits of the same file.
 
 ## Data Integrity Features
 
-- **Atomic writes**: Files are written to a temp file first, then renamed
+- **Atomic file writes**: Changed files are written to a temp file first, then renamed; the collection of files is not one filesystem transaction
 - **Corrupt backup**: If JSON parsing fails, the corrupt file is backed up with `.corrupt-{timestamp}` suffix
-- **Board integrity check**: On load, missing fields are filled with defaults, orphaned tasks are reassigned to valid columns
-- **Write queue**: Mutations are serialized through a promise queue to prevent race conditions
+- **Validation**: Invalid JSON shapes and unsafe IDs stop loading and saving. Recover the affected file manually; do not initialize a replacement board or fall back to a stale legacy file
+- **Board integrity check**: Optional missing fields are filled with defaults, orphaned tasks are reassigned to valid columns
+- **Write queue**: Extension mutations and reads are serialized through a promise queue; external JSON editors do not participate in that queue
 - **Activity pruning**: Only the 500 most recent activity entries are kept
 - **Orphaned file cleanup**: On save, files that don't correspond to in-memory entities are deleted
 
 ## Legacy Migration
 
-Projects with the old `.vscode/lynvo.json` single-file format are automatically migrated:
+Projects with the old `.vscode/lynvo.json` single-file format are automatically migrated only when no modular board exists:
 1. The legacy file is read and parsed
 2. Data is split into the modular structure
 3. The modular files are written
 4. The legacy file is left intact (not deleted)
+
+An existing modular board remains authoritative even when it is incomplete or damaged. Loading stops with an error so that its data can be recovered manually; it is never replaced automatically by an old legacy file or an empty board. Updates keep schema `2.0.0` and the existing paths.
 
 ## Autonomous Task Workflow for AI Agents
 
@@ -794,10 +809,13 @@ The `openCode` message validates file paths: must be relative (no `..`, no absol
 Deleting a column also deletes **all tasks** that were in that column. Use with caution.
 
 ### Sync Merge Behavior
-During sync, the entire task with the newer `updatedAt` wins, not individual fields. Conflict entries are created for supported differing fields when a local task wins over an existing remote task with a different timestamp. A remote-newer task can win without creating a conflict record.
+Sync merges fields against the last synchronized Git commit and combines independent edits. Incompatible edits produce conflicts for tasks, columns, or labels. Checklist and relation collections are merged by item ID. Without a common base, differing incompatible values are retained for review. `updatedAt` alone never authorizes discarding another side's task.
 
 ### `settings.json`
-The extension writes `settings.json` as an empty object `{}` on every save. Do not store custom data there.
+Existing `settings.json` contents are preserved; the extension does not expose settings stored in this file as a user configuration interface.
+
+### Agent Skill Installation
+Activation inspects each supported destination independently, including every local folder in a multi-root workspace, and respects each folder's `lynvo.autoInstallSkills` setting. Shared instruction files receive a managed Lynvo block while preserving surrounding project instructions. Dedicated Lynvo files retain their YAML frontmatter. Only unchanged, owned Lynvo content is updated; customized content is preserved even when `lynvo.installSkills` is invoked manually. Uninstall removes only verifiably owned files or blocks. A known previous hash allows safe upgrades of older unmarked Lynvo files.
 
 ## Quick Reference: File Operations
 
@@ -813,5 +831,5 @@ The extension writes `settings.json` as an empty object `{}` on every save. Do n
 | Add relation | Modify `tasks/{taskId}.json` + write activity | `relation_added` |
 | Create column | Modify `columns.json` + write activity | `column_created` |
 | Create label | Modify `board.json` labels + write activity | `label_created` |
-| Resolve conflict | Modify `tasks/{taskId}.json` + update `metadata/conflicts.json` | — |
+| Resolve conflict | Modify the affected task, `columns.json`, or `board.json` label + update `metadata/conflicts.json` | — |
 | Mark sync pending | Modify `metadata/sync.json` | — |
