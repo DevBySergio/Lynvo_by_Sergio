@@ -22,6 +22,7 @@ All notable changes to the "lynvo" extension will be documented in this file.
 - Count renamed default completion/in-progress columns correctly; exclude completed tasks from stale metrics.
 - Corrected documentation for table ordering, label creation/deletion, column reorder controls, and the supported Markdown subset.
 - Expanded regression coverage for persistence, synchronization, installer preservation, and webview behavior.
+- Reworked the embedded agent skill with semantic task reuse, deliberate column/label creation, native checklists and dependencies, evidence-based completion, and self-contained safe JSON write guidance.
 
 ## [0.0.1]
 

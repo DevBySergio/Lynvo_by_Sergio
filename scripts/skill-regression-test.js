@@ -178,6 +178,17 @@ const run = async () => {
     assert.ok(result.errors.some((entry) => entry.includes("symbolic link")));
     assert.equal(await fsp.readFile(external, "utf8"), "Do not overwrite this target\n");
 
+    // Exercise the actual shipped document, including its self-contained recipe.
+    const embeddedSkill = await fsp.readFile(path.resolve(__dirname, "../SKILL.md"), "utf8");
+    await fsp.writeFile(path.join(extension, "SKILL.md"), embeddedSkill);
+    await install({ force: true });
+    assert.equal(await fsp.readFile(globalCline, "utf8"), `${embeddedSkill}\n<!-- lynvo:managed sha256=${hash(embeddedSkill)} -->\n`);
+    const installedShared = await fsp.readFile(secondCopilot, "utf8");
+    assert.ok(installedShared.includes(embeddedSkill), "shared targets receive the complete shipped skill");
+    assert.equal(stripBlock(installedShared), projectInstructions);
+    assert.equal(await fsp.readFile(globalClaude, "utf8"), modifiedGlobal, "the shipped skill preserves customized instructions");
+    assert.equal((await install()).installed.length, 0, "the actual document installs idempotently");
+
     const removed = await SkillInstaller.uninstallAll(context);
     assert.ok(removed.removed.some((entry) => entry.includes("GitHub Copilot")));
     assert.equal(await fsp.readFile(secondCopilot, "utf8"), projectInstructions, "uninstall only removes owned block");

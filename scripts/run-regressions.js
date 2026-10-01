@@ -9,6 +9,7 @@ for (const script of [
   "persistence-regression-test.js",
   "sync-regression-test.js",
   "skill-regression-test.js",
+  "agent-skill-regression-test.js",
   "ui-regression-test.js",
 ]) {
   const result = spawnSync(process.execPath, [path.join(__dirname, script)], {
